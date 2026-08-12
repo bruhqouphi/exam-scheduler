@@ -168,10 +168,14 @@ export default function App() {
   if (!user) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-          <AuthScreen startMode={Auth.userCount(auth) ? 'signin' : 'signup'} />
-        </SafeAreaView>
+        {/* Accent behind the status bar so the cover runs to the top edge,
+            which is also why the status bar switches to light here. */}
+        <StatusBar style="light" />
+        <View style={{ flex: 1, backgroundColor: colors.accent }}>
+          <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+            <AuthScreen startMode={Auth.userCount(auth) ? 'signin' : 'signup'} />
+          </SafeAreaView>
+        </View>
       </SafeAreaProvider>
     );
   }

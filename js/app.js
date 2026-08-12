@@ -840,11 +840,58 @@
   }
 
   function setAuthMode(mode) {
+    const signUp = mode === 'signup';
     $$('.auth-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
-    $('#form-signin').hidden = mode !== 'signin';
-    $('#form-signup').hidden = mode !== 'signup';
+    $('#auth-pill').classList.toggle('right', signUp);
+    $('#form-signin').hidden = signUp;
+    $('#form-signup').hidden = !signUp;
+    $('#auth-title').textContent = signUp ? 'Create your account' : 'Welcome back';
+    $('#auth-sub').textContent = signUp
+      ? 'It takes a moment and stays in this browser.'
+      : 'Sign in to reach your timetable.';
     $('#signin-error').hidden = true;
     $('#signup-error').hidden = true;
+  }
+
+  // Masked input with no way to reveal it is a usability trap on a typo.
+  function initPasswordToggles() {
+    $$('[data-eye]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const input = $('#' + btn.dataset.eye);
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.textContent = show ? 'Hide' : 'Show';
+        btn.setAttribute('aria-label', (show ? 'Hide' : 'Show') + ' password');
+      }));
+  }
+
+  function updateStrength(value) {
+    const box = $('#signup-strength');
+    if (!value) { box.hidden = true; return; }
+    box.hidden = false;
+
+    const strength = AuthCore.passwordStrength(value);
+    const colour = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--danger)', off: 'var(--line)' };
+    $$('.strength-bars i').forEach((bar, i) => {
+      bar.style.background = i < strength.score ? colour[strength.tone] : 'var(--line)';
+    });
+    $('#strength-label').textContent = strength.label;
+    $('#strength-label').style.color = colour[strength.tone];
+
+    // The checklist turns "weak" into something actionable.
+    $('#rule-length').classList.toggle('met', value.length >= AuthCore.MIN_PASSWORD);
+    $('#rule-number').classList.toggle('met', /\d/.test(value));
+    $('#rule-case').classList.toggle('met', /[a-z]/.test(value) && /[A-Z]/.test(value));
+  }
+
+  function updateConfirm() {
+    const password = $('#signup-password').value;
+    const confirm = $('#signup-confirm').value;
+    const label = $('#confirm-status');
+    if (!confirm) { label.textContent = ''; return; }
+    const matches = confirm === password;
+    label.textContent = matches ? 'Matches' : 'Does not match';
+    label.style.color = matches ? 'var(--ok)' : 'var(--danger)';
   }
 
   function showAuthError(which, message) {
@@ -891,22 +938,17 @@
       if (!result.ok) { showAuthError('signup', result.error); return; }
       $('#form-signup').reset();
       $('#signup-strength').hidden = true;
+      $('#confirm-status').textContent = '';
       showApp(true);
       refresh();
     });
 
+    initPasswordToggles();
     $('#signup-password').addEventListener('input', e => {
-      const value = e.target.value;
-      const box = $('#signup-strength');
-      if (!value) { box.hidden = true; return; }
-      box.hidden = false;
-      const strength = AuthCore.passwordStrength(value);
-      const colour = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--danger)', off: 'var(--line)' };
-      $('#strength-fill').style.width = (strength.score / 5) * 100 + '%';
-      $('#strength-fill').style.background = colour[strength.tone];
-      $('#strength-label').textContent = strength.label;
-      $('#strength-label').style.color = colour[strength.tone];
+      updateStrength(e.target.value);
+      updateConfirm();
     });
+    $('#signup-confirm').addEventListener('input', updateConfirm);
 
     $('#btn-signout').addEventListener('click', () => {
       if (!confirm('Sign out? Your courses, rooms and timetable stay on this device.')) return;

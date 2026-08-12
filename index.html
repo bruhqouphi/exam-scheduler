@@ -10,62 +10,134 @@
 
 <!-- ============ AUTH GATE ============ -->
 <div class="auth-gate" id="auth-gate" hidden>
-  <div class="auth-card">
+  <div class="auth-cover" aria-hidden="true"><span class="blob one"></span><span class="blob two"></span></div>
+
+  <div class="auth-shell">
     <div class="auth-brand">
-      <span class="brand-mark lg">AE</span>
+      <span class="auth-mark">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="3" /><path d="M16 2v4M8 2v4M3 10h18" />
+          <path d="m9 16 2 2 4-4" />
+        </svg>
+      </span>
       <h1>Automated Exam<br />Timetable Scheduler</h1>
-      <p>Constraint-based timetabling that keeps every student clash-free.</p>
+      <p>Clash-free exam timetables, generated in one click.</p>
     </div>
 
-    <div class="auth-switch" id="auth-switch">
-      <button class="auth-tab active" data-mode="signin">Sign in</button>
-      <button class="auth-tab" data-mode="signup">Create account</button>
-    </div>
-
-    <!-- sign in -->
-    <form id="form-signin" class="auth-form">
-      <label>Email address
-        <input type="email" id="signin-email" placeholder="you@st.knust.edu.gh"
-               autocomplete="username" required />
-      </label>
-      <label>Password
-        <input type="password" id="signin-password" placeholder="Your password"
-               autocomplete="current-password" required />
-      </label>
-      <div class="auth-error" id="signin-error" hidden></div>
-      <button type="submit" class="btn primary auth-submit">Sign in</button>
-      <p class="auth-alt">New here? <button type="button" class="btn link" data-goto="signup">Create an account</button></p>
-    </form>
-
-    <!-- sign up -->
-    <form id="form-signup" class="auth-form" hidden>
-      <label>Full name
-        <input type="text" id="signup-name" placeholder="Joshua Kissi" autocomplete="name" required />
-      </label>
-      <label>Email address
-        <input type="email" id="signup-email" placeholder="you@st.knust.edu.gh"
-               autocomplete="username" required />
-      </label>
-      <label>Password <span class="hint">at least 6 characters</span>
-        <input type="password" id="signup-password" placeholder="Choose a password"
-               autocomplete="new-password" required />
-      </label>
-      <div class="strength" id="signup-strength" hidden>
-        <div class="strength-track"><div class="strength-fill" id="strength-fill"></div></div>
-        <span id="strength-label"></span>
+    <div class="auth-card">
+      <div class="auth-switch" id="auth-switch">
+        <span class="auth-pill" id="auth-pill"></span>
+        <button class="auth-tab active" data-mode="signin">Sign in</button>
+        <button class="auth-tab" data-mode="signup">Create account</button>
       </div>
-      <label>Confirm password
-        <input type="password" id="signup-confirm" placeholder="Type it again"
-               autocomplete="new-password" required />
-      </label>
-      <div class="auth-error" id="signup-error" hidden></div>
-      <button type="submit" class="btn primary auth-submit">Create account</button>
-      <p class="auth-alt">Already registered? <button type="button" class="btn link" data-goto="signin">Sign in</button></p>
-    </form>
+
+      <div class="auth-head">
+        <h2 id="auth-title">Welcome back</h2>
+        <p id="auth-sub">Sign in to reach your timetable.</p>
+      </div>
+
+      <!-- sign in -->
+      <form id="form-signin" class="auth-form">
+        <label class="field">Email address
+          <span class="input-wrap">
+            <svg class="field-icon" viewBox="0 0 24 24" width="17" height="17" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m2 7 10 6 10-6" />
+            </svg>
+            <input type="email" id="signin-email" placeholder="you@st.knust.edu.gh"
+                   autocomplete="username" required />
+          </span>
+        </label>
+        <label class="field">Password
+          <span class="input-wrap">
+            <svg class="field-icon" viewBox="0 0 24 24" width="17" height="17" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            </svg>
+            <input type="password" id="signin-password" placeholder="Your password"
+                   autocomplete="current-password" required />
+            <button type="button" class="eye" data-eye="signin-password" aria-label="Show password">Show</button>
+          </span>
+        </label>
+        <div class="auth-error" id="signin-error" hidden></div>
+        <button type="submit" class="btn primary auth-submit">Sign in</button>
+        <div class="auth-alt">
+          <span>New here?</span>
+          <button type="button" class="btn link" data-goto="signup">Create an account</button>
+        </div>
+      </form>
+
+      <!-- sign up -->
+      <form id="form-signup" class="auth-form" hidden>
+        <label class="field">Full name
+          <span class="input-wrap">
+            <svg class="field-icon" viewBox="0 0 24 24" width="17" height="17" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" />
+            </svg>
+            <input type="text" id="signup-name" placeholder="Joshua Kissi" autocomplete="name" required />
+          </span>
+        </label>
+        <label class="field">Email address
+          <span class="input-wrap">
+            <svg class="field-icon" viewBox="0 0 24 24" width="17" height="17" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" /><path d="m2 7 10 6 10-6" />
+            </svg>
+            <input type="email" id="signup-email" placeholder="you@st.knust.edu.gh"
+                   autocomplete="username" required />
+          </span>
+        </label>
+        <label class="field">Password
+          <span class="input-wrap">
+            <svg class="field-icon" viewBox="0 0 24 24" width="17" height="17" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
+            </svg>
+            <input type="password" id="signup-password" placeholder="Choose a password"
+                   autocomplete="new-password" required />
+            <button type="button" class="eye" data-eye="signup-password" aria-label="Show password">Show</button>
+          </span>
+        </label>
+
+        <div class="strength" id="signup-strength" hidden>
+          <div class="strength-bars">
+            <i></i><i></i><i></i><i></i><i></i>
+            <span id="strength-label"></span>
+          </div>
+          <ul class="rules">
+            <li id="rule-length"><b></b>6+ characters</li>
+            <li id="rule-number"><b></b>a number</li>
+            <li id="rule-case"><b></b>upper and lower case</li>
+          </ul>
+        </div>
+
+        <label class="field">
+          <span class="field-top">Confirm password <em id="confirm-status"></em></span>
+          <span class="input-wrap">
+            <svg class="field-icon" viewBox="0 0 24 24" width="17" height="17" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m5 13 4 4L19 7" />
+            </svg>
+            <input type="password" id="signup-confirm" placeholder="Type it again"
+                   autocomplete="new-password" required />
+            <button type="button" class="eye" data-eye="signup-confirm" aria-label="Show password">Show</button>
+          </span>
+        </label>
+
+        <div class="auth-error" id="signup-error" hidden></div>
+        <button type="submit" class="btn primary auth-submit">Create account</button>
+        <div class="auth-alt">
+          <span>Already registered?</span>
+          <button type="button" class="btn link" data-goto="signin">Sign in instead</button>
+        </div>
+      </form>
+    </div>
 
     <p class="auth-note">
-      Accounts are stored on this device only, so this protects the app from casual access
-      rather than acting as real security.
+      Accounts are stored in this browser only. Passwords are salted and hashed, but this
+      guards against casual access rather than acting as real security.
     </p>
   </div>
 </div>
