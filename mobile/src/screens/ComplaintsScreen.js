@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Alert, Share } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as Store from '../engine/store';
 import { byId, slotsOverlap, slotsAdjacent, compareSlots } from '../engine/model';
 import { fmtDate, fmtWhen } from '../format';
-import { colors, space, type } from '../theme';
+import { colors, space, type, radius } from '../theme';
 import {
   Card, CardHead, Field, Btn, LinkBtn, Row, Tag, Note, EmptyState, ListRow,
-  Select, Divider, Message, Issue, Chip, PromptModal
+  Select, Message, Issue, Chip, PromptModal, Overline
 } from '../ui';
+import { FadeIn, Reveal } from '../anim';
 
 const CATEGORIES = [
   { value: 'clash', label: 'Two of my exams clash' },
@@ -32,11 +34,24 @@ const CATEGORY_LABELS = {
   other: 'Other'
 };
 
+const CATEGORY_ICONS = {
+  clash: 'flash-outline',
+  backToBack: 'swap-horizontal-outline',
+  room: 'business-outline',
+  time: 'time-outline',
+  missing: 'help-circle-outline',
+  registration: 'person-outline',
+  accessibility: 'accessibility-outline',
+  other: 'ellipsis-horizontal-circle-outline'
+};
+
 const STATUS_LABELS = { new: 'New', reviewing: 'Reviewing', resolved: 'Resolved' };
+const STATUS_TONES = { new: 'bad', reviewing: 'warn', resolved: 'ok' };
 const BLANK = { studentId: '', studentName: '', courseId: '', category: 'clash', message: '' };
 
 export default function ComplaintsScreen({ state, options }) {
   const [form, setForm] = useState(BLANK);
+  const [formOpen, setFormOpen] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [lookupId, setLookupId] = useState('');
   const [lookup, setLookup] = useState(null);
@@ -85,6 +100,7 @@ export default function ComplaintsScreen({ state, options }) {
     if (unplaced) warnings.push({ bad: true, text: unplaced + ' of your exams have not been scheduled yet.' });
 
     setLookup({ id, rows, warnings });
+    setForm(f => ({ ...f, studentId: id }));
   }
 
   /* ---------- submitting ---------- */
@@ -97,6 +113,7 @@ export default function ComplaintsScreen({ state, options }) {
     }
     setFeedback({ tone: 'ok', text: 'Complaint submitted. The exams office can now see it below.' });
     setForm(BLANK);
+    setFormOpen(false);
   }
 
   /* ---------- admin side ---------- */
@@ -136,22 +153,29 @@ export default function ComplaintsScreen({ state, options }) {
     ? state.complaints
     : state.complaints.filter(c => c.status === filter);
 
+  const countFor = f => f === 'all'
+    ? state.complaints.length
+    : state.complaints.filter(c => c.status === f).length;
+
   return (
     <ScrollView contentContainerStyle={{ padding: space.md }} keyboardShouldPersistTaps="handled">
 
       {/* ---- student: find my exams ---- */}
       <Card>
-        <CardHead title="Find my exams" />
-        <Note>Enter your student ID to see your personal timetable before you complain.</Note>
+        <CardHead
+          title="Find my exams" icon="search-outline"
+          subtitle="Check your personal timetable first"
+        />
         <Row>
           <Field
             value={lookupId}
             onChangeText={setLookupId}
-            placeholder="20700001"
+            placeholder="Your student ID, e.g. 20700001"
             style={{ flex: 1, marginBottom: 0 }}
             onSubmitEditing={runLookup}
+            returnKeyType="search"
           />
-          <Btn title="Look up" onPress={runLookup} />
+          <Btn title="Look up" icon="arrow-forward" onPress={runLookup} />
         </Row>
 
         {lookup && lookup.empty ? (
@@ -165,84 +189,118 @@ export default function ComplaintsScreen({ state, options }) {
         ) : null}
 
         {lookup && lookup.rows ? (
-          <View style={{ marginTop: space.md }}>
-            {lookup.rows.map(r => (
+          <FadeIn style={{ marginTop: space.md }}>
+            <Overline>{lookup.rows.length + ' exam(s) for ' + lookup.id}</Overline>
+            {lookup.rows.map((r, i) => (
               <ListRow
                 key={r.course.id}
+                first={i === 0}
+                accent={r.slot ? 'ok' : 'warn'}
                 title={r.course.code}
                 subtitle={r.course.name}
                 right={
                   r.slot
-                    ? <Tag text={r.slot.start + '–' + r.slot.end} tone="accent" />
+                    ? <Tag text={r.slot.start + '–' + r.slot.end} tone="accent" icon="time" />
                     : <Tag text="not scheduled" tone="warn" />
                 }
               >
-                <Text style={[type.sub, { marginTop: 4 }]}>
-                  {r.slot ? fmtDate(r.slot.date) : '—'}{r.room ? '  ·  ' + r.room.name : ''}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                  <Ionicons name="calendar-outline" size={12} color={colors.muted} />
+                  <Text style={type.tiny}>
+                    {r.slot ? fmtDate(r.slot.date) : 'No date yet'}
+                    {r.room ? '  ·  ' + r.room.name : ''}
+                  </Text>
+                </View>
               </ListRow>
             ))}
-            <View style={{ marginTop: space.sm }}>
-              {lookup.warnings.map((w, i) => (
-                <Issue key={i} severity={w.bad ? 'error' : 'warning'} text={w.text} />
-              ))}
-            </View>
-          </View>
+            {lookup.warnings.length ? (
+              <View style={{ marginTop: space.md }}>
+                {lookup.warnings.map((w, i) => (
+                  <Issue
+                    key={i}
+                    severity={w.bad ? 'error' : 'warning'}
+                    kind={w.bad ? 'Clash' : 'Tight turnaround'}
+                    text={w.text}
+                  />
+                ))}
+              </View>
+            ) : (
+              <Message tone="ok" text="No clashes found in your personal timetable." />
+            )}
+          </FadeIn>
         ) : null}
       </Card>
 
       {/* ---- student: send a complaint ---- */}
       <Card>
-        <CardHead title="Send a complaint" />
-        <Row>
-          <Field
-            label="Student ID"
-            value={form.studentId}
-            onChangeText={v => set('studentId', v)}
-            placeholder="20700001"
-            style={{ flex: 1 }}
+        <CardHead
+          title="Send a complaint" icon="create-outline"
+          subtitle="Tell the exams office what is wrong"
+        >
+          <Btn
+            title={formOpen ? 'Close' : 'Write'}
+            icon={formOpen ? 'close' : 'add'}
+            variant={formOpen ? 'ghost' : 'soft'}
+            size="sm"
+            onPress={() => setFormOpen(v => !v)}
           />
-          <Field
-            label="Your name"
-            hint="optional"
-            value={form.studentName}
-            onChangeText={v => set('studentName', v)}
-            placeholder="Ama Mensah"
-            style={{ flex: 1 }}
-          />
-        </Row>
-        <Select
-          label="Which exam is this about?"
-          value={form.courseId}
-          options={courseOptions}
-          onChange={v => set('courseId', v)}
-          placeholder="— not about one specific exam —"
-        />
-        <Select
-          label="What is the problem?"
-          value={form.category}
-          options={CATEGORIES}
-          onChange={v => set('category', v)}
-        />
-        <Field
-          label="Details"
-          value={form.message}
-          onChangeText={v => set('message', v)}
-          placeholder="Explain the problem, including dates and course codes where you can."
-          multiline
-        />
-        <Btn title="Submit complaint" onPress={submit} />
+        </CardHead>
+
+        <Reveal open={formOpen}>
+          <View>
+            <Row>
+              <Field
+                label="Student ID" value={form.studentId}
+                onChangeText={v => set('studentId', v)}
+                placeholder="20700001" style={{ flex: 1 }}
+              />
+              <Field
+                label="Your name" hint="optional" value={form.studentName}
+                onChangeText={v => set('studentName', v)}
+                placeholder="Ama Mensah" style={{ flex: 1 }}
+              />
+            </Row>
+            <Select
+              label="Which exam is this about?" icon="book-outline"
+              value={form.courseId} options={courseOptions}
+              onChange={v => set('courseId', v)}
+              placeholder="— not about one specific exam —"
+            />
+            <Select
+              label="What is the problem?" icon="help-circle-outline"
+              value={form.category} options={CATEGORIES}
+              onChange={v => set('category', v)}
+            />
+            <Field
+              label="Details" value={form.message}
+              onChangeText={v => set('message', v)}
+              placeholder="Explain the problem, including dates and course codes where you can."
+              multiline
+            />
+            <Btn title="Submit complaint" icon="send" onPress={submit} />
+          </View>
+        </Reveal>
+
         {feedback ? (
-          <View style={{ marginTop: space.md }}>
+          <View style={{ marginTop: formOpen ? space.md : 0 }}>
             <Message tone={feedback.tone} text={feedback.text} />
           </View>
+        ) : null}
+
+        {!formOpen && !feedback ? (
+          <Note icon="information-circle-outline">
+            Complaints go to the exams office queue below, where they can be answered and tracked.
+          </Note>
         ) : null}
       </Card>
 
       {/* ---- exams office: the queue ---- */}
       <Card>
-        <CardHead title={'Complaints received (' + state.complaints.length + ')'}>
-          <Btn title="Export CSV" variant="ghost" size="sm" onPress={exportCsv} />
+        <CardHead
+          title="Complaints received" icon="file-tray-full-outline"
+          subtitle={state.complaints.length + ' total'}
+        >
+          <Btn title="Export" variant="ghost" size="sm" icon="share-outline" onPress={exportCsv} />
         </CardHead>
 
         <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: space.md }}>
@@ -250,6 +308,7 @@ export default function ComplaintsScreen({ state, options }) {
             <Chip
               key={f}
               label={f === 'all' ? 'All' : STATUS_LABELS[f]}
+              count={countFor(f)}
               active={filter === f}
               onPress={() => setFilter(f)}
             />
@@ -257,47 +316,74 @@ export default function ComplaintsScreen({ state, options }) {
         </View>
 
         {!visible.length ? (
-          <EmptyState>
-            {state.complaints.length ? 'No ' + filter + ' complaints.' : 'No complaints have been submitted yet.'}
+          <EmptyState icon="chatbubble-ellipses-outline">
+            {state.complaints.length
+              ? 'No ' + filter + ' complaints.'
+              : 'No complaints have been submitted yet.'}
           </EmptyState>
         ) : (
-          visible.map(c => {
+          visible.map((c, i) => {
             const course = c.courseId ? byId(state.courses, c.courseId) : null;
-            const tone = c.status === 'resolved' ? 'ok' : c.status === 'reviewing' ? 'warn' : 'bad';
             return (
-              <ListRow
-                key={c.id}
-                title={c.studentId + (c.studentName ? '  ·  ' + c.studentName : '')}
-                subtitle={(CATEGORY_LABELS[c.category] || c.category) +
-                          (course ? '  ·  ' + course.code : '')}
-                right={<Tag text={STATUS_LABELS[c.status]} tone={tone} />}
-              >
-                <Text style={[type.body, { marginTop: 6 }]}>{c.message}</Text>
-                <Text style={[type.sub, { marginTop: 4 }]}>{fmtWhen(c.createdAt)}</Text>
-
-                {c.response ? (
-                  <View style={{
-                    marginTop: 8, padding: 10, borderRadius: 8, backgroundColor: colors.accentSoft
-                  }}>
-                    <Text style={{ fontSize: 13, color: colors.text }}>
-                      <Text style={{ fontWeight: '700' }}>Response: </Text>{c.response}
+              <FadeIn key={c.id} delay={i * 40} from={12}>
+                <ListRow
+                  first={i === 0}
+                  accent={STATUS_TONES[c.status]}
+                  title={c.studentId + (c.studentName ? '  ·  ' + c.studentName : '')}
+                  subtitle={fmtWhen(c.createdAt)}
+                  right={<Tag text={STATUS_LABELS[c.status]} tone={STATUS_TONES[c.status]} />}
+                >
+                  <View style={styles.catRow}>
+                    <Ionicons
+                      name={CATEGORY_ICONS[c.category] || 'ellipse-outline'}
+                      size={12} color={colors.accent}
+                    />
+                    <Text style={[type.tiny, { color: colors.accent, fontWeight: '700' }]}>
+                      {CATEGORY_LABELS[c.category] || c.category}
+                      {course ? '  ·  ' + course.code : ''}
                     </Text>
                   </View>
-                ) : null}
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', marginTop: 6 }}>
-                  {c.status === 'new' ? (
-                    <LinkBtn title="Reviewing" onPress={() => Store.updateComplaint(c.id, { status: 'reviewing' })} />
+                  <Text style={[type.body, { marginTop: 6 }]}>{c.message}</Text>
+
+                  {c.response ? (
+                    <View style={styles.response}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                        <Ionicons name="return-down-forward" size={12} color={colors.accent} />
+                        <Text style={[type.overline, { color: colors.accent }]}>RESPONSE</Text>
+                      </View>
+                      <Text style={{ fontSize: 13.5, color: colors.text, lineHeight: 19 }}>
+                        {c.response}
+                      </Text>
+                    </View>
                   ) : null}
-                  {c.status !== 'resolved' ? (
-                    <LinkBtn title="Resolve" onPress={() => Store.updateComplaint(c.id, { status: 'resolved' })} />
-                  ) : (
-                    <LinkBtn title="Reopen" onPress={() => Store.updateComplaint(c.id, { status: 'new' })} />
-                  )}
-                  <LinkBtn title={c.response ? 'Edit reply' : 'Reply'} onPress={() => setReplyTo(c)} />
-                  <LinkBtn title="Delete" danger onPress={() => remove(c.id)} />
-                </View>
-              </ListRow>
+
+                  <View style={styles.actions}>
+                    {c.status === 'new' ? (
+                      <LinkBtn
+                        title="Reviewing" icon="eye-outline"
+                        onPress={() => Store.updateComplaint(c.id, { status: 'reviewing' })}
+                      />
+                    ) : null}
+                    {c.status !== 'resolved' ? (
+                      <LinkBtn
+                        title="Resolve" icon="checkmark-circle-outline"
+                        onPress={() => Store.updateComplaint(c.id, { status: 'resolved' })}
+                      />
+                    ) : (
+                      <LinkBtn
+                        title="Reopen" icon="refresh-outline"
+                        onPress={() => Store.updateComplaint(c.id, { status: 'new' })}
+                      />
+                    )}
+                    <LinkBtn
+                      title={c.response ? 'Edit reply' : 'Reply'} icon="chatbox-outline"
+                      onPress={() => setReplyTo(c)}
+                    />
+                    <LinkBtn title="Delete" icon="trash-outline" danger onPress={() => remove(c.id)} />
+                  </View>
+                </ListRow>
+              </FadeIn>
             );
           })
         )}
@@ -315,3 +401,15 @@ export default function ComplaintsScreen({ state, options }) {
     </ScrollView>
   );
 }
+
+const styles = {
+  catRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  response: {
+    marginTop: 8, padding: 10, borderRadius: radius.sm,
+    backgroundColor: colors.accentSoft, borderLeftWidth: 3, borderLeftColor: colors.accent
+  },
+  actions: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end',
+    marginTop: 8, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.lineSoft
+  }
+};

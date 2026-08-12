@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Alert, Share, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as Store from '../engine/store';
 import { generate } from '../engine/scheduler';
 import { byId, headcount, compareSlots } from '../engine/model';
 import { fmtDate, fmtLongDate } from '../format';
-import { colors, space, type } from '../theme';
+import { colors, space, type, radius, elevation } from '../theme';
 import {
-  Card, CardHead, Btn, Row, Tag, Note, EmptyState, ListRow, StatTile, Message, Select, Chip, Divider
+  Card, CardHead, Btn, Row, Tag, Note, EmptyState, ListRow, StatTile,
+  Message, Select, Chip, Divider, Stepper, Meter, Overline
 } from '../ui';
+import { FadeIn, Reveal, Pulse } from '../anim';
 
 export default function TimetableScreen({ state, conflicts, options, setOptions }) {
   const [busy, setBusy] = useState(false);
@@ -52,10 +55,10 @@ export default function TimetableScreen({ state, conflicts, options, setOptions 
     const lines = [['Course Code', 'Course Name', 'Date', 'Start', 'End', 'Room', 'Location', 'Students']];
     state.timetable.forEach(e => {
       const c = byId(state.courses, e.courseId);
-      const s = byId(state.slots, e.slotId);
+      const sl = byId(state.slots, e.slotId);
       const r = byId(state.rooms, e.roomId);
       if (!c) return;
-      lines.push([c.code, c.name, s ? s.date : '', s ? s.start : '', s ? s.end : '',
+      lines.push([c.code, c.name, sl ? sl.date : '', sl ? sl.start : '', sl ? sl.end : '',
                   r ? r.name : '', r ? (r.building || '') : '', headcount(c)]);
     });
     const csv = lines.map(row =>
@@ -85,9 +88,9 @@ export default function TimetableScreen({ state, conflicts, options, setOptions 
     .sort((a, b) => compareSlots(a.slot, b.slot));
 
   const slotOptions = [{ value: '', label: '— unassigned —' }].concat(
-    state.slots.map(s => ({
-      value: s.id,
-      label: s.date + '  ' + s.start + '–' + s.end + (s.available === false ? '  (blocked)' : '')
+    state.slots.map(sl => ({
+      value: sl.id,
+      label: sl.date + '  ' + sl.start + '–' + sl.end + (sl.available === false ? '  (blocked)' : '')
     })));
 
   const roomOptions = [{ value: '', label: '— unassigned —' }].concat(
@@ -99,57 +102,83 @@ export default function TimetableScreen({ state, conflicts, options, setOptions 
   const errors = conflicts.filter(c => c.severity === 'error').length;
   const stats = state.stats;
 
-  /* ---------- day grouping ---------- */
-
   const days = {};
   rows.forEach(r => {
     const key = r.slot ? r.slot.date : 'unassigned';
     (days[key] = days[key] || []).push(r);
   });
 
+  const ready = state.courses.length && state.rooms.length && state.slots.length;
+
   return (
     <ScrollView contentContainerStyle={{ padding: space.md }} keyboardShouldPersistTaps="handled">
-      <Card>
-        <CardHead title="Generate schedule" />
-        <Btn
-          title={busy ? 'Solving…' : 'Generate Schedule'}
-          onPress={run}
-          disabled={busy}
-        />
-        {busy ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.md }}>
-            <ActivityIndicator color={colors.accent} />
-            <Text style={type.sub}>Searching for a conflict-free timetable…</Text>
-          </View>
-        ) : null}
 
-        <Row style={{ marginTop: space.sm }}>
-          <Btn title="Clear" variant="ghost" size="sm" onPress={clear} style={{ flex: 1 }} />
-          <Btn title="Export CSV" variant="ghost" size="sm" onPress={exportCsv} style={{ flex: 1 }} />
+      {/* ---- the solver ---- */}
+      <Card style={styles.hero} padded={false}>
+        <View style={{ padding: space.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+            <View style={styles.heroIcon}>
+              <Ionicons name="git-network-outline" size={17} color={colors.white} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[type.h2, { color: colors.white }]}>Generate schedule</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12.5 }}>
+                {ready
+                  ? state.courses.length + ' exams · ' + state.rooms.length + ' rooms · ' +
+                    state.slots.length + ' slots'
+                  : 'Add courses, rooms and slots first'}
+              </Text>
+            </View>
+          </View>
+
           <Btn
-            title={showOptions ? 'Hide settings' : 'Settings'}
+            title={busy ? 'Solving…' : 'Generate Schedule'}
+            icon={busy ? undefined : 'flash'}
+            onPress={run}
+            disabled={busy || !ready}
+            style={styles.heroBtn}
             variant="ghost"
-            size="sm"
-            onPress={() => setShowOptions(v => !v)}
-            style={{ flex: 1 }}
           />
+
+          {busy ? (
+            <Pulse style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.md }}>
+              <ActivityIndicator color={colors.white} />
+              <Text style={{ color: colors.white, fontSize: 12.5 }}>
+                Searching for a conflict-free timetable…
+              </Text>
+            </Pulse>
+          ) : null}
+        </View>
+      </Card>
+
+      <Card>
+        <Row>
+          <Btn title="Settings" icon="options-outline" variant="ghost" size="sm"
+            onPress={() => setShowOptions(v => !v)} style={{ flex: 1 }} />
+          <Btn title="Export" icon="share-outline" variant="ghost" size="sm"
+            onPress={exportCsv} style={{ flex: 1 }} />
+          <Btn title="Clear" icon="trash-outline" variant="danger" size="sm"
+            onPress={clear} style={{ flex: 1 }} />
         </Row>
 
-        {showOptions ? (
+        <Reveal open={showOptions}>
           <View style={{ marginTop: space.md }}>
-            <Divider />
-            <Text style={[type.h3, { marginBottom: space.sm }]}>Optimisation settings</Text>
-            <Note>Higher numbers push the solver harder on that goal.</Note>
-            <Stepper2 label="Spread across days" value={options.weightSpread}
-              onChange={v => setOpt('weightSpread', v)} max={20} />
-            <Stepper2 label="Avoid back-to-back" value={options.weightBackToBack}
-              onChange={v => setOpt('weightBackToBack', v)} max={30} />
-            <Stepper2 label="Avoid same-day exams" value={options.weightSameDay}
-              onChange={v => setOpt('weightSameDay', v)} max={30} />
-            <Stepper2 label="Back-to-back gap (min)" value={options.gapMinutes}
-              onChange={v => setOpt('gapMinutes', v)} step={15} max={240} />
+            <Divider style={{ marginTop: 0 }} />
+            <Overline>Optimisation</Overline>
+            <Note icon="information-circle-outline">
+              Higher numbers push the solver harder on that goal. Hard rules — clashes, capacity,
+              availability — are never traded away.
+            </Note>
+            <Stepper label="Spread across days" hint="use the whole exam week"
+              value={options.weightSpread} onChange={v => setOpt('weightSpread', v)} max={20} />
+            <Stepper label="Avoid back-to-back" hint="no two papers in a row"
+              value={options.weightBackToBack} onChange={v => setOpt('weightBackToBack', v)} max={30} />
+            <Stepper label="Avoid same-day exams" hint="one paper per student per day"
+              value={options.weightSameDay} onChange={v => setOpt('weightSameDay', v)} max={30} />
+            <Stepper label="Back-to-back gap" hint="minutes that still count as adjacent"
+              value={options.gapMinutes} onChange={v => setOpt('gapMinutes', v)} step={15} max={240} />
           </View>
-        ) : null}
+        </Reveal>
 
         {result ? (
           <View style={{ marginTop: space.md }}>
@@ -158,105 +187,148 @@ export default function TimetableScreen({ state, conflicts, options, setOptions 
         ) : null}
 
         {stats ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.xs }}>
-            <StatTile label="Exams scheduled" value={stats.scheduled + '/' + (stats.total || stats.scheduled)}
+          <View style={styles.statGrid}>
+            <StatTile delay={0} icon="checkmark-done" label="Scheduled"
+              value={stats.scheduled + '/' + (stats.total || stats.scheduled)}
               tone={stats.unscheduled ? undefined : 'good'} />
-            <StatTile label="Hard conflicts" value={errors} tone={errors ? 'bad' : 'good'} />
-            <StatTile label="Days used" value={stats.daysUsed + '/' + stats.daysAvailable} />
-            <StatTile label="Back-to-back" value={stats.backToBack} tone={stats.backToBack ? 'bad' : undefined} />
-            <StatTile label="Same-day sittings" value={stats.sameDayDoubles} />
-            <StatTile label="Room use" value={stats.roomUtilisation + '%'} />
-            <StatTile label="Search nodes" value={stats.nodes} />
-            <StatTile label="Solve time" value={stats.elapsedMs + ' ms'} />
+            <StatTile delay={50} icon="warning" label="Conflicts" value={errors}
+              tone={errors ? 'bad' : 'good'} />
+            <StatTile delay={100} icon="calendar" label="Days used"
+              value={stats.daysUsed + '/' + stats.daysAvailable} />
+            <StatTile delay={150} icon="swap-horizontal" label="Back-to-back"
+              value={stats.backToBack} tone={stats.backToBack ? 'bad' : 'good'} />
+            <StatTile delay={200} icon="today" label="Same-day" value={stats.sameDayDoubles} />
+            <StatTile delay={250} icon="albums" label="Room use" value={stats.roomUtilisation + '%'} />
+            <StatTile delay={300} icon="git-branch" label="Nodes" value={stats.nodes} />
+            <StatTile delay={350} icon="timer" label="Solve time" value={stats.elapsedMs + ' ms'} />
           </View>
         ) : null}
       </Card>
 
+      {/* ---- anything that could not be placed ---- */}
       {state.unscheduled && state.unscheduled.length ? (
         <Card>
-          <CardHead title="Could not be scheduled" />
+          <CardHead title="Could not be scheduled" icon="alert-circle-outline"
+            subtitle={state.unscheduled.length + ' exam(s)'} />
           {state.unscheduled.map((u, i) => {
             const c = byId(state.courses, u.courseId);
             return (
-              <View key={u.courseId + i} style={{ marginBottom: space.sm }}>
-                <Text style={type.h3}>{c ? c.code + ' — ' + c.name : 'Course'}</Text>
-                <Text style={type.sub}>{u.reason}</Text>
-              </View>
+              <FadeIn key={u.courseId + i} delay={i * 50}>
+                <View style={styles.blocked}>
+                  <Text style={type.h3}>{c ? c.code + ' — ' + c.name : 'Course'}</Text>
+                  <Text style={[type.sub, { marginTop: 2 }]}>{u.reason}</Text>
+                </View>
+              </FadeIn>
             );
           })}
         </Card>
       ) : null}
 
+      {/* ---- the timetable ---- */}
       <Card>
-        <CardHead title="Timetable">
+        <CardHead title="Timetable" icon="calendar-outline"
+          subtitle={rows.length + ' exam(s) placed'}>
           <Chip label="List" active={view === 'list'} onPress={() => setView('list')} />
           <Chip label="By day" active={view === 'day'} onPress={() => setView('day')} />
         </CardHead>
 
         {!rows.length ? (
-          <EmptyState>
+          <EmptyState icon="calendar-outline">
             No timetable yet. Add courses, rooms and time slots, then tap Generate Schedule.
           </EmptyState>
         ) : view === 'day' ? (
-          Object.keys(days).sort().map(date => (
-            <View key={date} style={{ marginBottom: space.md }}>
-              <Text style={[type.h3, { color: colors.accent, marginTop: space.sm }]}>
-                {date === 'unassigned' ? 'Unassigned' : fmtLongDate(date)}
-              </Text>
-              <Text style={type.sub}>{days[date].length} exam(s)</Text>
-              {days[date].map(r => (
-                <ListRow
-                  key={r.course.id}
-                  title={r.course.code + '  ' + (r.slot ? r.slot.start + '–' + r.slot.end : '')}
-                  subtitle={r.course.name + (r.room ? '  ·  ' + r.room.name : '')}
-                  tone={flagged.has(r.course.id) ? 'bad' : undefined}
-                  right={<Tag text={String(headcount(r.course))} tone="accent" />}
-                />
-              ))}
-            </View>
+          Object.keys(days).sort().map((date, di) => (
+            <FadeIn key={date} delay={di * 60} from={14}>
+              <View style={{ marginBottom: space.md }}>
+                <View style={styles.dayHead}>
+                  <Text style={[type.h3, { color: colors.accent, flex: 1 }]}>
+                    {date === 'unassigned' ? 'Unassigned' : fmtLongDate(date)}
+                  </Text>
+                  <Tag text={days[date].length + ' exam(s)'} tone="accent" />
+                </View>
+
+                {days[date].map((r, i) => (
+                  <View key={r.course.id} style={styles.timelineRow}>
+                    <View style={styles.timelineGutter}>
+                      <Text style={styles.timeText}>{r.slot ? r.slot.start : '--:--'}</Text>
+                      <View style={styles.timelineLine} />
+                    </View>
+                    <View style={[
+                      styles.timelineCard,
+                      flagged.has(r.course.id) && {
+                        borderColor: colors.dangerLine, backgroundColor: colors.dangerSoft
+                      }
+                    ]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+                        <Text style={[type.h3, { flex: 1 }]}>{r.course.code}</Text>
+                        <Tag text={String(headcount(r.course))} tone="accent" icon="people" />
+                      </View>
+                      <Text style={type.sub} numberOfLines={1}>{r.course.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                        <Ionicons name="location-outline" size={12} color={colors.muted} />
+                        <Text style={type.tiny}>
+                          {r.room ? r.room.name + (r.room.building ? ' · ' + r.room.building : '') : 'No room'}
+                          {r.slot ? '  ·  ends ' + r.slot.end : ''}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </FadeIn>
           ))
         ) : (
-          rows.map(r => {
+          rows.map((r, i) => {
             const size = headcount(r.course);
             const cap = r.room ? r.room.capacity : 0;
+            const over = r.room && size > cap;
             return (
-              <ListRow
-                key={r.course.id}
-                title={r.course.code}
-                subtitle={r.course.name}
-                tone={flagged.has(r.course.id) ? 'bad' : undefined}
-                right={
-                  <Tag
-                    text={size + ' / ' + (r.room ? cap : '—')}
-                    tone={!r.room ? 'warn' : size > cap ? 'bad' : 'ok'}
-                  />
-                }
-              >
-                <Text style={[type.sub, { marginTop: 4 }]}>
-                  {r.slot ? fmtDate(r.slot.date) + '  ·  ' + r.slot.start + '–' + r.slot.end : 'No slot'}
-                  {r.room ? '  ·  ' + r.room.name : ''}
-                </Text>
-                <Row style={{ marginTop: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Select
-                      compact
-                      value={r.slot ? r.slot.id : ''}
-                      options={slotOptions}
-                      placeholder="Slot"
-                      onChange={v => Store.setAssignment(r.course.id, v, r.room ? r.room.id : '')}
+              <FadeIn key={r.course.id} delay={i * 35} from={12}>
+                <ListRow
+                  first={i === 0}
+                  accent={flagged.has(r.course.id) ? 'bad' : 'ok'}
+                  title={r.course.code}
+                  subtitle={r.course.name}
+                  right={
+                    <Tag
+                      text={size + ' / ' + (r.room ? cap : '—')}
+                      tone={!r.room ? 'warn' : over ? 'bad' : 'ok'}
+                      icon="people"
                     />
+                  }
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 }}>
+                    <Ionicons name="calendar-outline" size={12} color={colors.muted} />
+                    <Text style={type.tiny}>
+                      {r.slot ? fmtDate(r.slot.date) + '  ·  ' + r.slot.start + '–' + r.slot.end : 'No slot'}
+                      {r.room ? '  ·  ' + r.room.name : ''}
+                    </Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Select
-                      compact
-                      value={r.room ? r.room.id : ''}
-                      options={roomOptions}
-                      placeholder="Room"
-                      onChange={v => Store.setAssignment(r.course.id, r.slot ? r.slot.id : '', v)}
-                    />
-                  </View>
-                </Row>
-              </ListRow>
+
+                  {r.room ? <Meter value={size} max={cap} tone={over ? 'bad' : 'ok'} /> : null}
+
+                  <Row style={{ marginTop: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <Select
+                        compact icon="time-outline"
+                        value={r.slot ? r.slot.id : ''}
+                        options={slotOptions}
+                        placeholder="Slot"
+                        onChange={v => Store.setAssignment(r.course.id, v, r.room ? r.room.id : '')}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Select
+                        compact icon="business-outline"
+                        value={r.room ? r.room.id : ''}
+                        options={roomOptions}
+                        placeholder="Room"
+                        onChange={v => Store.setAssignment(r.course.id, r.slot ? r.slot.id : '', v)}
+                      />
+                    </View>
+                  </Row>
+                </ListRow>
+              </FadeIn>
             );
           })
         )}
@@ -265,17 +337,34 @@ export default function TimetableScreen({ state, conflicts, options, setOptions 
   );
 }
 
-/* Local stepper — keeps the settings block self-contained. */
-function Stepper2({ label, value, onChange, step = 1, min = 0, max = 100 }) {
-  const clamp = v => Math.min(max, Math.max(min, v));
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: space.sm, gap: space.sm }}>
-      <Text style={[type.label, { flex: 1 }]}>{label}</Text>
-      <Btn title="−" variant="ghost" size="sm" onPress={() => onChange(clamp(value - step))} />
-      <Text style={{ minWidth: 38, textAlign: 'center', fontWeight: '600', color: colors.accent }}>
-        {value}
-      </Text>
-      <Btn title="+" variant="ghost" size="sm" onPress={() => onChange(clamp(value + step))} />
-    </View>
-  );
-}
+const styles = {
+  hero: { backgroundColor: colors.accent, borderColor: colors.accentDeep, ...elevation.mid },
+  heroIcon: {
+    width: 32, height: 32, borderRadius: radius.sm,
+    backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center'
+  },
+  heroBtn: { marginTop: space.lg },
+
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.xs },
+
+  blocked: {
+    backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: colors.dangerLine,
+    borderRadius: radius.md, padding: space.md, marginBottom: space.sm
+  },
+
+  dayHead: {
+    flexDirection: 'row', alignItems: 'center', gap: space.sm,
+    paddingBottom: space.sm, marginTop: space.sm,
+    borderBottomWidth: 2, borderBottomColor: colors.accentSoft
+  },
+  timelineRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+  timelineGutter: { width: 46, alignItems: 'center' },
+  timeText: {
+    fontSize: 12, fontWeight: '800', color: colors.accent, fontVariant: ['tabular-nums']
+  },
+  timelineLine: { flex: 1, width: 2, backgroundColor: colors.accentSoft, marginTop: 4, borderRadius: 1 },
+  timelineCard: {
+    flex: 1, backgroundColor: colors.tint, borderWidth: 1, borderColor: colors.lineSoft,
+    borderRadius: radius.md, padding: space.md
+  }
+};

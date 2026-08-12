@@ -2,18 +2,21 @@
    App.js — shell: loads saved data, owns the tab bar and the data menu.
 ------------------------------------------------------------------- */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, Pressable, ActivityIndicator, StyleSheet, Alert, Share, Modal, ScrollView
+  View, Text, Pressable, ActivityIndicator, StyleSheet, Alert, Share,
+  Modal, ScrollView, Animated
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as Store from './src/engine/store';
 import { detectConflicts, DEFAULTS } from './src/engine/scheduler';
 import { build as buildDemo } from './src/engine/demo';
-import { colors, radius, space, type, shadow } from './src/theme';
+import { colors, radius, space, type, elevation } from './src/theme';
 import { Btn, PromptModal } from './src/ui';
+import { FadeSwap, FadeIn, Pop, PressScale, useSheetAnimation, EASE, DUR } from './src/anim';
 
 import CoursesScreen from './src/screens/CoursesScreen';
 import RoomsScreen from './src/screens/RoomsScreen';
@@ -23,12 +26,12 @@ import ConflictsScreen from './src/screens/ConflictsScreen';
 import ComplaintsScreen from './src/screens/ComplaintsScreen';
 
 const TABS = [
-  { key: 'courses', label: 'Courses' },
-  { key: 'rooms', label: 'Rooms' },
-  { key: 'slots', label: 'Slots' },
-  { key: 'timetable', label: 'Timetable' },
-  { key: 'conflicts', label: 'Conflicts' },
-  { key: 'complaints', label: 'Complaints' }
+  { key: 'courses', label: 'Courses', icon: 'book' },
+  { key: 'rooms', label: 'Rooms', icon: 'business' },
+  { key: 'slots', label: 'Slots', icon: 'time' },
+  { key: 'timetable', label: 'Table', icon: 'calendar' },
+  { key: 'conflicts', label: 'Issues', icon: 'warning' },
+  { key: 'complaints', label: 'Inbox', icon: 'chatbubble-ellipses' }
 ];
 
 export default function App() {
@@ -46,7 +49,7 @@ export default function App() {
   useEffect(() => { Store.hydrate(); }, []);
 
   // Recomputed whenever the data or the gap setting changes; the Timetable
-  // screen uses it for row highlighting and the Conflicts screen lists it.
+  // screen uses it for row highlighting and the Issues screen lists it.
   const conflicts = useMemo(
     () => (state.ready ? detectConflicts(state, options) : []),
     [state, options]
@@ -59,6 +62,7 @@ export default function App() {
     courses: state.courses.length,
     rooms: state.rooms.length,
     slots: state.slots.length,
+    timetable: state.timetable.length,
     conflicts: errorCount,
     complaints: openComplaints
   };
@@ -120,14 +124,23 @@ export default function App() {
       ]);
   }
 
+  const menuAnim = useSheetAnimation(menuOpen);
+
   /* ---------- render ---------- */
 
   if (!state.ready) {
     return (
       <SafeAreaProvider>
         <View style={[s.center, { backgroundColor: colors.bg }]}>
-          <ActivityIndicator size="large" color={colors.accent} />
-          <Text style={[type.sub, { marginTop: space.md }]}>Loading your data…</Text>
+          <FadeIn>
+            <View style={s.splashMark}>
+              <Text style={s.splashMarkText}>ES</Text>
+            </View>
+          </FadeIn>
+          <FadeIn delay={120}>
+            <Text style={[type.h2, { marginTop: space.lg }]}>Exam Scheduler</Text>
+          </FadeIn>
+          <ActivityIndicator color={colors.accent} style={{ marginTop: space.md }} />
         </View>
       </SafeAreaProvider>
     );
@@ -149,69 +162,68 @@ export default function App() {
     complaints: <ComplaintsScreen state={state} options={options} />
   };
 
+  const active = TABS.find(t => t.key === tab);
+
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <SafeAreaView style={s.root} edges={['top', 'bottom']}>
 
         <View style={s.header}>
-          <View style={s.brandMark}><Text style={s.brandMarkText}>ES</Text></View>
+          <View style={s.brandMark}>
+            <Text style={s.brandMarkText}>ES</Text>
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={type.h1}>Exam Scheduler</Text>
-            <Text style={type.sub}>Constraint-based timetable generator</Text>
+            <Text style={type.sub}>{active ? active.label : ''} · {subtitleFor(tab, badges)}</Text>
           </View>
-          <Btn title="Data" variant="ghost" size="sm" onPress={() => setMenuOpen(true)} />
+          <PressScale onPress={() => setMenuOpen(true)} scaleTo={0.9} style={s.headerBtn}>
+            <Ionicons name="ellipsis-horizontal" size={18} color={colors.accent} />
+          </PressScale>
         </View>
 
-        <View style={{ flex: 1 }}>{screens[tab]}</View>
+        <FadeSwap swapKey={tab} style={s.body}>
+          {screens[tab]}
+        </FadeSwap>
 
-        <View style={s.tabBar}>
-          {TABS.map(t => {
-            const active = tab === t.key;
-            const badge = badges[t.key];
-            const alert = (t.key === 'conflicts' || t.key === 'complaints') && badge > 0;
-            return (
-              <Pressable key={t.key} onPress={() => setTab(t.key)} style={s.tab}>
-                <View style={[s.tabBadge, {
-                  backgroundColor: alert ? colors.dangerSoft : active ? colors.accentSoft : 'transparent'
-                }]}>
-                  <Text style={[s.tabBadgeText, {
-                    color: alert ? colors.danger : active ? colors.accent : colors.muted
-                  }]}>
-                    {badge || 0}
+        <TabBar tab={tab} setTab={setTab} badges={badges} />
+
+        <Modal visible={menuOpen} transparent animationType="none" onRequestClose={() => setMenuOpen(false)}>
+          <Pressable style={{ flex: 1 }} onPress={() => setMenuOpen(false)}>
+            <Animated.View style={[s.backdrop, menuAnim.backdrop]}>
+              <Animated.View style={[s.sheet, menuAnim.sheet]}>
+                <Pressable onPress={() => {}}>
+                  <View style={s.sheetHandle} />
+                  <Text style={[type.h2, { marginBottom: space.md }]}>Data</Text>
+                  <ScrollView>
+                    <MenuItem
+                      icon="sparkles" title="Load sample data"
+                      subtitle="10 courses, 6 rooms, 15 sessions" onPress={loadDemo}
+                    />
+                    <MenuItem
+                      icon="share-outline" title="Export / share data"
+                      subtitle="Send the whole dataset as JSON" onPress={exportData}
+                    />
+                    <MenuItem
+                      icon="download-outline" title="Import data"
+                      subtitle="Paste a previously exported file"
+                      onPress={() => { setMenuOpen(false); setImportOpen(true); }}
+                    />
+                    <MenuItem
+                      icon="trash-outline" title="Clear everything"
+                      subtitle="Delete all data on this phone" danger onPress={clearAll}
+                    />
+                  </ScrollView>
+                  <Text style={[type.tiny, { marginTop: space.md, textAlign: 'center' }]}>
+                    Data is stored on this phone only. Export to keep a backup.
                   </Text>
-                </View>
-                <Text
-                  numberOfLines={1}
-                  style={[s.tabLabel, active && { color: colors.accent, fontWeight: '700' }]}
-                >
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
-          <Pressable style={s.backdrop} onPress={() => setMenuOpen(false)}>
-            <Pressable style={s.sheet} onPress={() => {}}>
-              <Text style={[type.h2, { marginBottom: space.md }]}>Data</Text>
-              <ScrollView>
-                <Btn title="Load sample data" onPress={loadDemo} style={{ marginBottom: space.sm }} />
-                <Btn title="Export / share data" variant="ghost" onPress={exportData}
-                  style={{ marginBottom: space.sm }} />
-                <Btn title="Import data" variant="ghost"
-                  onPress={() => { setMenuOpen(false); setImportOpen(true); }}
-                  style={{ marginBottom: space.sm }} />
-                <Btn title="Clear everything" variant="danger" onPress={clearAll}
-                  style={{ marginBottom: space.sm }} />
-              </ScrollView>
-              <Text style={[type.sub, { marginTop: space.sm }]}>
-                Data is stored on this phone only. Export to keep a backup.
-              </Text>
-              <Btn title="Close" variant="ghost" onPress={() => setMenuOpen(false)}
-                style={{ marginTop: space.md }} />
-            </Pressable>
+                  <Btn
+                    title="Close" variant="ghost"
+                    onPress={() => setMenuOpen(false)} style={{ marginTop: space.md }}
+                  />
+                </Pressable>
+              </Animated.View>
+            </Animated.View>
           </Pressable>
         </Modal>
 
@@ -229,36 +241,169 @@ export default function App() {
   );
 }
 
+/* ---------- tab bar ---------- */
+
+// Six tabs with a pill that slides to the selected one. The pill is a
+// single animated view rather than a per-tab background, so the movement
+// reads as one object travelling instead of six lights blinking.
+function TabBar({ tab, setTab, badges }) {
+  const [width, setWidth] = useState(0);
+  const index = TABS.findIndex(t => t.key === tab);
+  const slide = useRef(new Animated.Value(index)).current;
+
+  useEffect(() => {
+    Animated.timing(slide, {
+      toValue: index,
+      duration: DUR.base,
+      easing: EASE,
+      useNativeDriver: true
+    }).start();
+  }, [index, slide]);
+
+  const tabWidth = width / TABS.length;
+
+  return (
+    <View style={s.tabBar} onLayout={e => setWidth(e.nativeEvent.layout.width)}>
+      {width > 0 ? (
+        <Animated.View
+          style={[
+            s.tabPill,
+            {
+              width: tabWidth - 10,
+              transform: [{
+                translateX: slide.interpolate({
+                  inputRange: TABS.map((_, i) => i),
+                  outputRange: TABS.map((_, i) => i * tabWidth + 5)
+                })
+              }]
+            }
+          ]}
+        />
+      ) : null}
+
+      {TABS.map(t => {
+        const isActive = tab === t.key;
+        const count = badges[t.key] || 0;
+        const alert = (t.key === 'conflicts' || t.key === 'complaints') && count > 0;
+        return (
+          <Pressable key={t.key} onPress={() => setTab(t.key)} style={s.tab}>
+            <View>
+              <Ionicons
+                name={isActive ? t.icon : t.icon + '-outline'}
+                size={19}
+                color={isActive ? colors.accent : colors.faint}
+              />
+              {count > 0 ? (
+                <Pop value={count} style={[s.badge, alert && { backgroundColor: colors.danger }]}>
+                  <Text style={s.badgeText}>{count > 99 ? '99+' : count}</Text>
+                </Pop>
+              ) : null}
+            </View>
+            <Text
+              numberOfLines={1}
+              style={[s.tabLabel, isActive && { color: colors.accent, fontWeight: '800' }]}
+            >
+              {t.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/* ---------- data menu row ---------- */
+
+function MenuItem({ icon, title, subtitle, onPress, danger }) {
+  return (
+    <PressScale onPress={onPress} scaleTo={0.98} style={s.menuItem}>
+      <View style={[s.menuIcon, danger && { backgroundColor: colors.dangerSoft }]}>
+        <Ionicons name={icon} size={17} color={danger ? colors.danger : colors.accent} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[type.h3, danger && { color: colors.danger }]}>{title}</Text>
+        <Text style={type.tiny}>{subtitle}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={15} color={colors.faint} />
+    </PressScale>
+  );
+}
+
+// One-line summary under the app title, so the header earns its space.
+function subtitleFor(tab, badges) {
+  switch (tab) {
+    case 'courses': return badges.courses + ' course(s)';
+    case 'rooms': return badges.rooms + ' room(s)';
+    case 'slots': return badges.slots + ' slot(s)';
+    case 'timetable': return badges.timetable + ' scheduled';
+    case 'conflicts': return badges.conflicts ? badges.conflicts + ' to fix' : 'all clear';
+    case 'complaints': return badges.complaints ? badges.complaints + ' open' : 'none open';
+    default: return '';
+  }
+}
+
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
+  body: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  splashMark: {
+    width: 62, height: 62, borderRadius: radius.xl, backgroundColor: colors.accent,
+    alignItems: 'center', justifyContent: 'center', ...elevation.mid
+  },
+  splashMarkText: { color: colors.white, fontWeight: '800', fontSize: 20, letterSpacing: -0.5 },
 
   header: {
     flexDirection: 'row', alignItems: 'center', gap: space.md,
-    paddingHorizontal: space.md, paddingVertical: space.md,
-    backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.line
+    paddingHorizontal: space.lg, paddingVertical: space.md,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1, borderBottomColor: colors.lineSoft
   },
   brandMark: {
     width: 38, height: 38, borderRadius: radius.md, backgroundColor: colors.accent,
+    alignItems: 'center', justifyContent: 'center', ...elevation.low
+  },
+  brandMarkText: { color: colors.white, fontWeight: '800', fontSize: 13.5, letterSpacing: -0.3 },
+  headerBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accentSoft,
     alignItems: 'center', justifyContent: 'center'
   },
-  brandMarkText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
   tabBar: {
     flexDirection: 'row', backgroundColor: colors.surface,
-    borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 6, paddingBottom: 4,
-    ...shadow
+    borderTopWidth: 1, borderTopColor: colors.lineSoft,
+    paddingTop: 8, paddingBottom: 6, ...elevation.mid
   },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 2 },
-  tabBadge: {
-    minWidth: 24, paddingHorizontal: 6, paddingVertical: 1,
-    borderRadius: radius.pill, alignItems: 'center', marginBottom: 2
+  tabPill: {
+    position: 'absolute', top: 4, bottom: 4,
+    backgroundColor: colors.accentSoft, borderRadius: radius.md
   },
-  tabBadgeText: { fontSize: 11, fontWeight: '700' },
-  tabLabel: { fontSize: 10.5, color: colors.muted, fontWeight: '600' },
+  tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 2 },
+  tabLabel: { fontSize: 10, color: colors.faint, fontWeight: '700' },
+  badge: {
+    position: 'absolute', top: -5, right: -11, minWidth: 16, paddingHorizontal: 4,
+    height: 16, borderRadius: 8, backgroundColor: colors.accent,
+    alignItems: 'center', justifyContent: 'center'
+  },
+  badgeText: { color: colors.white, fontSize: 9.5, fontWeight: '800' },
 
   backdrop: {
-    flex: 1, backgroundColor: 'rgba(20,26,48,0.45)', justifyContent: 'center', padding: space.xl
+    flex: 1, backgroundColor: 'rgba(13,18,38,0.5)', justifyContent: 'flex-end', padding: space.md
   },
-  sheet: { backgroundColor: '#fff', borderRadius: radius.lg, padding: space.lg, maxHeight: '80%' }
+  sheet: {
+    backgroundColor: colors.white, borderRadius: radius.xl,
+    padding: space.lg, maxHeight: '82%', ...elevation.high
+  },
+  sheetHandle: {
+    width: 34, height: 4, borderRadius: 2, backgroundColor: colors.line,
+    alignSelf: 'center', marginBottom: space.md
+  },
+  menuItem: {
+    flexDirection: 'row', alignItems: 'center', gap: space.md,
+    paddingVertical: 11, paddingHorizontal: 4
+  },
+  menuIcon: {
+    width: 36, height: 36, borderRadius: radius.sm, backgroundColor: colors.accentSoft,
+    alignItems: 'center', justifyContent: 'center'
+  }
 });
