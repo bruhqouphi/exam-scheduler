@@ -1,0 +1,4 @@
+{
+  "//": "Marks the engine as ES modules so `npm test` can import it in plain Node. Metro transpiles these files either way.",
+  "type": "module"
+}
