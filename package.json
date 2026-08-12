@@ -1,0 +1,12 @@
+{
+  "name": "exam-scheduler",
+  "version": "1.0.0",
+  "description": "Constraint-satisfaction exam timetable generator — courses, rooms, time slots, automatic scheduling and conflict detection.",
+  "main": "index.html",
+  "scripts": {
+    "test": "node test/run.js"
+  },
+  "keywords": ["exam", "timetable", "scheduling", "csp", "constraint-satisfaction"],
+  "license": "MIT",
+  "private": true
+}

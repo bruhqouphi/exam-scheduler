@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exam Scheduler — CSP Timetable Generator</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">ES</span>
+    <div>
+      <h1>Exam Scheduler</h1>
+      <p>Constraint-based exam timetable generator</p>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn ghost" id="btn-demo">Load sample data</button>
+    <button class="btn ghost" id="btn-export">Export data</button>
+    <label class="btn ghost file-btn">Import data<input type="file" id="file-import" accept="application/json" hidden /></label>
+    <button class="btn danger-ghost" id="btn-reset">Clear all</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="courses">Courses <span class="pill" id="count-courses">0</span></button>
+  <button class="tab" data-tab="rooms">Rooms <span class="pill" id="count-rooms">0</span></button>
+  <button class="tab" data-tab="slots">Time Slots <span class="pill" id="count-slots">0</span></button>
+  <button class="tab" data-tab="schedule">Timetable</button>
+  <button class="tab" data-tab="conflicts">Conflicts <span class="pill" id="count-conflicts">0</span></button>
+</nav>
+
+<main>
+
+  <!-- ============ COURSES ============ -->
+  <section class="panel active" id="panel-courses">
+    <div class="grid">
+      <div class="card form-card">
+        <h2 id="course-form-title">Add a course</h2>
+        <form id="form-course">
+          <input type="hidden" id="course-id" />
+          <label>Course code
+            <input type="text" id="course-code" placeholder="CSM 157" required />
+          </label>
+          <label>Course name
+            <input type="text" id="course-name" placeholder="Discrete Mathematics" required />
+          </label>
+          <div class="row">
+            <label>Exam duration (minutes)
+              <input type="number" id="course-duration" value="120" min="15" step="15" required />
+            </label>
+            <label>Number of students
+              <input type="number" id="course-count" value="0" min="0" />
+            </label>
+          </div>
+          <label>Registered students <span class="hint">optional — IDs separated by commas, spaces or new lines</span>
+            <textarea id="course-students" rows="3" placeholder="1234567, 1234568, 1234569"></textarea>
+          </label>
+          <p class="note">List real student IDs when you want clash detection across courses. If you only give a
+             headcount, the app still enforces room capacity but cannot know who overlaps.</p>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Save course</button>
+            <button type="button" class="btn ghost" id="course-cancel" hidden>Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Courses / exams</h2>
+          <input type="search" class="search" id="search-courses" placeholder="Search courses..." />
+        </div>
+        <div class="table-wrap">
+          <table id="table-courses">
+            <thead>
+              <tr><th>Code</th><th>Name</th><th>Students</th><th>Duration</th><th>Registered IDs</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ROOMS ============ -->
+  <section class="panel" id="panel-rooms">
+    <div class="grid">
+      <div class="card form-card">
+        <h2 id="room-form-title">Add a room</h2>
+        <form id="form-room">
+          <input type="hidden" id="room-id" />
+          <label>Room name / number
+            <input type="text" id="room-name" placeholder="PB 010" required />
+          </label>
+          <div class="row">
+            <label>Capacity
+              <input type="number" id="room-capacity" value="100" min="1" required />
+            </label>
+            <label>Building / location
+              <input type="text" id="room-building" placeholder="Petroleum Block" />
+            </label>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="room-available" checked /> Available for exams
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Save room</button>
+            <button type="button" class="btn ghost" id="room-cancel" hidden>Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Rooms</h2>
+          <input type="search" class="search" id="search-rooms" placeholder="Search rooms..." />
+        </div>
+        <div class="table-wrap">
+          <table id="table-rooms">
+            <thead>
+              <tr><th>Room</th><th>Capacity</th><th>Location</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TIME SLOTS ============ -->
+  <section class="panel" id="panel-slots">
+    <div class="grid">
+      <div class="card form-card">
+        <h2 id="slot-form-title">Add a time slot</h2>
+        <form id="form-slot">
+          <input type="hidden" id="slot-id" />
+          <label>Exam date
+            <input type="date" id="slot-date" required />
+          </label>
+          <div class="row">
+            <label>Start time
+              <input type="time" id="slot-start" value="08:00" required />
+            </label>
+            <label>End time
+              <input type="time" id="slot-end" value="10:00" required />
+            </label>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="slot-available" checked /> Slot is available
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Save slot</button>
+            <button type="button" class="btn ghost" id="slot-cancel" hidden>Cancel</button>
+          </div>
+        </form>
+
+        <div class="divider"></div>
+        <h3>Bulk create</h3>
+        <p class="note">Generate the same daily sessions across a date range.</p>
+        <div class="row">
+          <label>From <input type="date" id="bulk-from" /></label>
+          <label>To <input type="date" id="bulk-to" /></label>
+        </div>
+        <label>Sessions per day <span class="hint">start-end pairs, one per line</span>
+          <textarea id="bulk-sessions" rows="3">08:00-10:00
+12:00-14:00
+16:00-18:00</textarea>
+        </label>
+        <label class="check"><input type="checkbox" id="bulk-skip-weekends" checked /> Skip weekends</label>
+        <button type="button" class="btn primary" id="btn-bulk-slots">Create slots</button>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Time slots</h2>
+          <button class="btn ghost small" id="btn-clear-slots">Remove all</button>
+        </div>
+        <div class="table-wrap">
+          <table id="table-slots">
+            <thead>
+              <tr><th>Date</th><th>Start</th><th>End</th><th>Length</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TIMETABLE ============ -->
+  <section class="panel" id="panel-schedule">
+    <div class="card">
+      <div class="card-head">
+        <h2>Generate schedule</h2>
+        <div class="head-actions">
+          <button class="btn ghost small" id="btn-clear-timetable">Clear timetable</button>
+          <button class="btn ghost small" id="btn-csv">Export CSV</button>
+          <button class="btn ghost small" id="btn-print">Print</button>
+          <button class="btn primary" id="btn-generate">Generate Schedule</button>
+        </div>
+      </div>
+
+      <details class="options">
+        <summary>Optimisation settings</summary>
+        <div class="options-grid">
+          <label>Spread across days
+            <input type="range" id="opt-spread" min="0" max="20" value="6" />
+            <output id="out-spread">6</output>
+          </label>
+          <label>Avoid back-to-back exams
+            <input type="range" id="opt-b2b" min="0" max="30" value="12" />
+            <output id="out-b2b">12</output>
+          </label>
+          <label>Avoid same-day exams
+            <input type="range" id="opt-sameday" min="0" max="30" value="8" />
+            <output id="out-sameday">8</output>
+          </label>
+          <label>Tight room fit
+            <input type="range" id="opt-waste" min="0" max="20" value="5" />
+            <output id="out-waste">0.25</output>
+          </label>
+          <label>Back-to-back gap (minutes)
+            <input type="number" id="opt-gap" value="60" min="0" step="15" />
+          </label>
+        </div>
+      </details>
+
+      <div id="generate-message" class="message" hidden></div>
+      <div id="stats" class="stats" hidden></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Timetable</h2>
+        <div class="head-actions">
+          <label class="check inline"><input type="radio" name="view" value="list" checked /> List</label>
+          <label class="check inline"><input type="radio" name="view" value="calendar" /> By day</label>
+        </div>
+      </div>
+      <div id="timetable-view"></div>
+      <div id="unscheduled-view"></div>
+    </div>
+  </section>
+
+  <!-- ============ CONFLICTS ============ -->
+  <section class="panel" id="panel-conflicts">
+    <div class="card">
+      <div class="card-head">
+        <h2>Conflict check</h2>
+        <button class="btn primary small" id="btn-recheck">Re-check now</button>
+      </div>
+      <p class="note">Runs against the timetable as it stands — including any manual changes you made in the
+         Timetable tab.</p>
+      <div id="conflict-list"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  Data is stored in this browser only. Use <em>Export data</em> to keep a backup.
+</footer>
+
+<script src="js/store.js"></script>
+<script src="js/scheduler.js"></script>
+<script src="js/demo.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
