@@ -8,6 +8,7 @@
 
 import * as M from '../src/engine/model.js';
 import * as S from '../src/engine/scheduler.js';
+import * as A from '../src/engine/auth-core.js';
 import { build } from '../src/engine/demo.js';
 
 let failures = 0;
@@ -110,6 +111,58 @@ check('a complaint with no message is rejected',
 const filed = M.makeComplaint({ studentId: '20700001', message: 'My exams clash.', category: 'clash' });
 check('a valid complaint starts as new', filed.status === 'new');
 check('complaints carry a submission timestamp', !isNaN(new Date(filed.createdAt).getTime()));
+
+/* ---------- accounts ---------- */
+
+console.log('\n=== ACCOUNTS ===');
+check('sha256("") matches the NIST vector',
+      A.sha256('') === 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+check('sha256("abc") matches the NIST vector',
+      A.sha256('abc') === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+check('sha256 handles multi-byte characters', A.sha256('héllo 😀').length === 64);
+
+const salt = A.makeSalt();
+check('a salt is generated', salt.length === 24);
+check('two salts differ', A.makeSalt() !== A.makeSalt());
+check('the same password and salt hash the same',
+      A.hashPassword('pw', salt) === A.hashPassword('pw', salt));
+check('a different salt gives a different hash',
+      A.hashPassword('pw', salt) !== A.hashPassword('pw', A.makeSalt()));
+
+check('sign-up needs a name',
+      A.validateSignUp({ name: '', email: 'a@b.com', password: 'secret1', confirm: 'secret1' }, []) !== null);
+check('sign-up rejects a malformed email',
+      A.validateSignUp({ name: 'A B', email: 'nope', password: 'secret1', confirm: 'secret1' }, []) !== null);
+check('sign-up rejects a short password',
+      A.validateSignUp({ name: 'A B', email: 'a@b.com', password: 'abc', confirm: 'abc' }, []) !== null);
+check('sign-up rejects mismatched passwords',
+      A.validateSignUp({ name: 'A B', email: 'a@b.com', password: 'secret1', confirm: 'secret2' }, []) !== null);
+check('sign-up rejects a duplicate email',
+      A.validateSignUp({ name: 'A B', email: 'A@B.com', password: 'secret1', confirm: 'secret1' },
+                       ['a@b.com']) !== null);
+check('valid details pass validation',
+      A.validateSignUp({ name: 'Joshua Kissi', email: 'j@k.com', password: 'secret123',
+                         confirm: 'secret123' }, []) === null);
+
+const account = A.makeUser({ name: 'Joshua Kissi', email: '  Joshua@ST.knust.edu.gh ',
+                             password: 'secret123' });
+check('the email is normalised', account.email === 'joshua@st.knust.edu.gh');
+check('the password is never stored in the clear',
+      JSON.stringify(account).indexOf('secret123') === -1);
+check('a salt and hash are stored instead',
+      account.salt.length === 24 && account.hash.length === 64);
+check('the right password verifies', A.verifyPassword(account, 'secret123'));
+check('a wrong password does not', !A.verifyPassword(account, 'secret124'));
+check('an empty password does not', !A.verifyPassword(account, ''));
+check('publicUser strips the credentials',
+      A.publicUser(account).hash === undefined && A.publicUser(account).salt === undefined);
+check('accounts are found by email, case-insensitively',
+      A.findByEmail([account], ' JOSHUA@st.knust.edu.gh ') !== null);
+check('an unknown email finds nothing', A.findByEmail([account], 'nobody@example.com') === null);
+check('password strength is graded',
+      A.passwordStrength('abc').tone === 'bad' && A.passwordStrength('Str0ng!Passw0rd').tone === 'ok');
+check('initials are derived from the name',
+      A.initials('Joshua Kissi') === 'JK' && A.initials('') === '?');
 
 /* ---------- infeasible input ---------- */
 

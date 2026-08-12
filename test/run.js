@@ -11,6 +11,8 @@ global.localStorage = {
   removeItem: k => { delete mem[k]; }
 };
 
+const AuthCore = global.AuthCore = require('../js/auth-core.js');
+const Auth = global.Auth = require('../js/auth.js');
 const Store = global.Store = require('../js/store.js');
 const Scheduler = global.Scheduler = require('../js/scheduler.js');
 const DemoData = require('../js/demo.js');
@@ -88,7 +90,89 @@ check('detects too many students for a room', types.indexOf('capacity') > -1);
 check('detects scheduling outside available periods', types.indexOf('availability') > -1);
 check('detects a slot shorter than the exam', types.indexOf('duration') > -1);
 
-/* ---------- 3. student complaints ---------- */
+/* ---------- 3. accounts ---------- */
+
+console.log('\n=== ACCOUNTS ===');
+
+// SHA-256 against the official NIST vectors — everything else rests on this.
+check('sha256("") matches the NIST vector',
+      AuthCore.sha256('') === 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+check('sha256("abc") matches the NIST vector',
+      AuthCore.sha256('abc') === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+check('sha256 handles multi-byte characters',
+      AuthCore.sha256('héllo 😀').length === 64);
+
+const salt = AuthCore.makeSalt();
+check('a salt is generated', salt.length === 24);
+check('two salts differ', AuthCore.makeSalt() !== AuthCore.makeSalt());
+check('the same password and salt hash the same',
+      AuthCore.hashPassword('pw', salt) === AuthCore.hashPassword('pw', salt));
+check('a different salt gives a different hash',
+      AuthCore.hashPassword('pw', salt) !== AuthCore.hashPassword('pw', AuthCore.makeSalt()));
+
+Auth.load();
+check('no accounts on a fresh install', Auth.userCount() === 0);
+check('nobody is signed in yet', Auth.isSignedIn() === false);
+
+// validation
+check('sign-up needs a name',
+      Auth.signUp({ name: '', email: 'a@b.com', password: 'secret1', confirm: 'secret1' }).ok === false);
+check('sign-up rejects a malformed email',
+      Auth.signUp({ name: 'A B', email: 'not-an-email', password: 'secret1', confirm: 'secret1' }).ok === false);
+check('sign-up rejects a short password',
+      Auth.signUp({ name: 'A B', email: 'a@b.com', password: 'abc', confirm: 'abc' }).ok === false);
+check('sign-up rejects mismatched passwords',
+      Auth.signUp({ name: 'A B', email: 'a@b.com', password: 'secret1', confirm: 'secret2' }).ok === false);
+check('nothing was saved by the rejected attempts', Auth.userCount() === 0);
+
+const created = Auth.signUp({
+  name: 'Joshua Kissi', email: '  Joshua@ST.knust.edu.gh ',
+  password: 'secret123', confirm: 'secret123'
+});
+check('a valid sign-up succeeds', created.ok === true);
+check('the email is normalised', created.user.email === 'joshua@st.knust.edu.gh');
+check('signing up signs you in', Auth.isSignedIn() === true);
+check('the session exposes no password hash',
+      created.user.hash === undefined && created.user.salt === undefined);
+
+check('a duplicate email is refused',
+      Auth.signUp({ name: 'Someone', email: 'JOSHUA@st.knust.edu.gh',
+                    password: 'other123', confirm: 'other123' }).ok === false);
+check('the duplicate did not create a second account', Auth.userCount() === 1);
+
+Auth.signOut();
+check('signing out ends the session', Auth.isSignedIn() === false);
+check('signing out keeps the account', Auth.userCount() === 1);
+
+check('the wrong password is refused',
+      Auth.signIn({ email: 'joshua@st.knust.edu.gh', password: 'wrong' }).ok === false);
+check('an unknown email is refused',
+      Auth.signIn({ email: 'nobody@example.com', password: 'secret123' }).ok === false);
+check('wrong password and unknown email give the same message',
+      Auth.signIn({ email: 'joshua@st.knust.edu.gh', password: 'wrong' }).error ===
+      Auth.signIn({ email: 'nobody@example.com', password: 'secret123' }).error);
+check('a failed sign-in leaves you signed out', Auth.isSignedIn() === false);
+
+const back = Auth.signIn({ email: ' JOSHUA@st.knust.edu.gh ', password: 'secret123' });
+check('the right password signs you in', back.ok === true);
+check('sign-in is case- and space-insensitive on email', back.user.name === 'Joshua Kissi');
+
+// stored shape
+const stored = JSON.parse(localStorage.getItem('exam-scheduler-auth-v1'));
+check('the password is never stored in the clear',
+      JSON.stringify(stored).indexOf('secret123') === -1);
+check('a salt and hash are stored instead',
+      stored.users[0].salt.length === 24 && stored.users[0].hash.length === 64);
+check('accounts are kept out of the timetable data',
+      localStorage.getItem('exam-scheduler-v1').indexOf('joshua@st.knust.edu.gh') === -1);
+
+check('password strength is graded', AuthCore.passwordStrength('abc').tone === 'bad' &&
+      AuthCore.passwordStrength('Str0ng!Passw0rd').tone === 'ok');
+check('initials are derived from the name', AuthCore.initials('Joshua Kissi') === 'JK');
+
+Auth.signOut();
+
+/* ---------- 4. student complaints ---------- */
 
 console.log('\n=== COMPLAINTS ===');
 const someStudent = state.courses[0].students[0];
@@ -131,7 +215,7 @@ Store.replaceState({ courses: [], rooms: [], slots: [], timetable: [] });
 check('data saved before complaints existed still loads',
       Array.isArray(Store.getState().complaints) && Store.getState().complaints.length === 0);
 
-/* ---------- 4. impossible courses are explained, not silently dropped ---------- */
+/* ---------- 5. impossible courses are explained, not silently dropped ---------- */
 
 console.log('\n=== INFEASIBLE INPUT ===');
 Store.clearAll();
@@ -146,7 +230,7 @@ check('explains a class too big for every room',
 check('explains an exam longer than every slot',
       infeasible.unscheduled.some(u => /long enough/.test(u.reason)));
 
-/* ---------- 5. saturated instance: 8 exams into exactly 8 openings ---------- */
+/* ---------- 6. saturated instance: 8 exams into exactly 8 openings ---------- */
 
 console.log('\n=== SATURATED INSTANCE ===');
 Store.clearAll();

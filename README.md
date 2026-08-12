@@ -1,4 +1,4 @@
-# Exam Scheduler
+# Automated Exam Timetable Scheduler
 
 A constraint-satisfaction (CSP) exam timetable generator. Add your courses, rooms and exam
 periods, press **Generate Schedule**, and the solver assigns every exam a date, a time and a
@@ -95,7 +95,23 @@ A **Complaints** tab where students can raise problems the solver cannot know ab
   a response, change status, reopen or delete, and export the lot to CSV. The tab badge counts
   complaints that are still open.
 
-### 7. Optimisation
+### 7. Accounts — sign in and sign up
+Both apps open on a sign-in screen. Creating an account asks for a name, email and password
+(with a live strength meter); after that the session is remembered, so the app opens straight
+into the timetable until you sign out from the account menu.
+
+Passwords are **never stored in the clear**. Each account gets a random 24-character salt, and
+the password is stretched through 4,000 rounds of SHA-256 before the digest is saved. The
+SHA-256 implementation is hand-written (no dependency) and verified against the official NIST
+test vectors and 310 fuzzed inputs cross-checked with Node's `crypto`.
+
+> **This is a front door, not a vault.** Accounts live on the device alongside the data, so
+> anyone able to edit that storage can forge a session. Salting and stretching protect a
+> *reused* password if someone reads the stored values — real access control needs a server
+> that holds the accounts. Sign-in also returns one message for both a wrong password and an
+> unknown email, so the form cannot be used to discover who has an account.
+
+### 8. Optimisation
 Beyond staying legal, the solver minimises a cost function covering:
 
 - spreading exams evenly across the available days
@@ -150,6 +166,8 @@ The search in [`js/scheduler.js`](js/scheduler.js) is:
 Web app (repo root)
   index.html          markup and page structure
   css/style.css       styling
+  js/auth-core.js     account rules: SHA-256, salting, stretching, validation
+  js/auth.js          accounts and session (localStorage)
   js/store.js         data model (courses, rooms, slots, timetable, complaints),
                       localStorage persistence and time helpers
   js/scheduler.js     the CSP engine: domains, constraints, search, cost, conflict detection
@@ -160,6 +178,8 @@ Web app (repo root)
 
 Mobile app (mobile/)
   App.js                    shell: hydration, tab bar, data menu
+  src/engine/auth-core.js   the same account rules, as an ES module
+  src/engine/auth.js        accounts and session (AsyncStorage)
   src/engine/model.js       shared helpers and record factories
   src/engine/scheduler.js   the same CSP engine, as an ES module
   src/engine/store.js       state container, AsyncStorage persistence
@@ -168,23 +188,27 @@ Mobile app (mobile/)
   src/ui.js                 shared components (Select and prompt are modals —
                             React Native has no <select> or window.prompt)
   src/format.js             date/time formatting and input validation
+  src/screens/AuthScreen.js one screen for sign in / create account
   src/screens/*.js          one screen per tab
   test/run.mjs              headless test harness (Node)
 ```
 
-The two versions share one algorithm: `mobile/src/engine/scheduler.js` is
-`js/scheduler.js` with the IIFE wrapper swapped for ES module imports. Everything between
-those lines — domain construction, backtracking, cost function, conflict detection — is
-character-for-character identical.
+The two versions share their logic: `mobile/src/engine/scheduler.js` is `js/scheduler.js`,
+and `mobile/src/engine/auth-core.js` is `js/auth-core.js`, each with the IIFE wrapper swapped
+for ES module exports. Everything between those lines — domain construction, backtracking,
+cost function, conflict detection, password hashing and validation — is character-for-character
+identical, and the test suites check that the copies have not drifted.
 
 ## Tests
 
 ```
-node test/run.js          # web version   — 30 checks
-cd mobile && npm test     # mobile engine — 24 checks
+node test/run.js          # web version   — 63 checks
+cd mobile && npm test     # mobile engine — 48 checks
 ```
 
-Covering: the hard constraints hold on the sample dataset; each conflict type is
+Covering: the hard constraints hold on the sample dataset; SHA-256 matches the NIST vectors;
+the account lifecycle (validation, duplicate emails, sign in/out, wrong credentials, and that
+no password is ever stored in the clear); each conflict type is
 detected on a hand-broken timetable; the complaint lifecycle (submit, validate, respond,
 change status, delete, and loading data saved before complaints existed); impossible courses
 are explained rather than dropped; a fully saturated instance (8 exams into exactly 8

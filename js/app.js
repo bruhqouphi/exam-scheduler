@@ -823,6 +823,101 @@
     });
   }
 
+  /* ================= accounts ================= */
+
+  // The app is hidden until someone is signed in. This is a front door on
+  // a device-local app, not real security — the note on the form says so.
+  function showApp(signedIn) {
+    ['topbar', 'tabs', 'main', 'foot'].forEach(id => { $('#' + id).hidden = !signedIn; });
+    $('#auth-gate').hidden = signedIn;
+
+    if (signedIn) {
+      const user = Auth.currentUser();
+      $('#user-name').textContent = user.name;
+      $('#user-avatar').textContent = AuthCore.initials(user.name);
+      $('#user-chip').title = 'Signed in as ' + user.email;
+    }
+  }
+
+  function setAuthMode(mode) {
+    $$('.auth-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+    $('#form-signin').hidden = mode !== 'signin';
+    $('#form-signup').hidden = mode !== 'signup';
+    $('#signin-error').hidden = true;
+    $('#signup-error').hidden = true;
+  }
+
+  function showAuthError(which, message) {
+    const box = $('#' + which + '-error');
+    box.textContent = message;
+    box.hidden = false;
+    // Re-trigger the shake animation on a repeated failure.
+    box.style.animation = 'none';
+    void box.offsetWidth;
+    box.style.animation = '';
+  }
+
+  function initAuth() {
+    Auth.load();
+
+    $$('.auth-tab').forEach(tab =>
+      tab.addEventListener('click', () => setAuthMode(tab.dataset.mode)));
+    $$('[data-goto]').forEach(btn =>
+      btn.addEventListener('click', () => setAuthMode(btn.dataset.goto)));
+
+    // Returning users land on sign in; a first run has nothing to sign in to.
+    setAuthMode(Auth.userCount() ? 'signin' : 'signup');
+
+    $('#form-signin').addEventListener('submit', e => {
+      e.preventDefault();
+      const result = Auth.signIn({
+        email: $('#signin-email').value,
+        password: $('#signin-password').value
+      });
+      if (!result.ok) { showAuthError('signin', result.error); return; }
+      $('#form-signin').reset();
+      showApp(true);
+      refresh();
+    });
+
+    $('#form-signup').addEventListener('submit', e => {
+      e.preventDefault();
+      const result = Auth.signUp({
+        name: $('#signup-name').value,
+        email: $('#signup-email').value,
+        password: $('#signup-password').value,
+        confirm: $('#signup-confirm').value
+      });
+      if (!result.ok) { showAuthError('signup', result.error); return; }
+      $('#form-signup').reset();
+      $('#signup-strength').hidden = true;
+      showApp(true);
+      refresh();
+    });
+
+    $('#signup-password').addEventListener('input', e => {
+      const value = e.target.value;
+      const box = $('#signup-strength');
+      if (!value) { box.hidden = true; return; }
+      box.hidden = false;
+      const strength = AuthCore.passwordStrength(value);
+      const colour = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--danger)', off: 'var(--line)' };
+      $('#strength-fill').style.width = (strength.score / 5) * 100 + '%';
+      $('#strength-fill').style.background = colour[strength.tone];
+      $('#strength-label').textContent = strength.label;
+      $('#strength-label').style.color = colour[strength.tone];
+    });
+
+    $('#btn-signout').addEventListener('click', () => {
+      if (!confirm('Sign out? Your courses, rooms and timetable stay on this device.')) return;
+      Auth.signOut();
+      setAuthMode('signin');
+      showApp(false);
+    });
+
+    showApp(Auth.isSignedIn());
+  }
+
   /* ================= data in / out ================= */
 
   function exportCsv() {
@@ -926,6 +1021,7 @@
   /* ================= boot ================= */
 
   document.addEventListener('DOMContentLoaded', () => {
+    initAuth();
     initTabs();
     bindOptionOutputs();
     initCourses();

@@ -3,20 +3,87 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Exam Scheduler — CSP Timetable Generator</title>
+  <title>Automated Exam Timetable Scheduler</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-<header class="topbar">
+<!-- ============ AUTH GATE ============ -->
+<div class="auth-gate" id="auth-gate" hidden>
+  <div class="auth-card">
+    <div class="auth-brand">
+      <span class="brand-mark lg">AE</span>
+      <h1>Automated Exam<br />Timetable Scheduler</h1>
+      <p>Constraint-based timetabling that keeps every student clash-free.</p>
+    </div>
+
+    <div class="auth-switch" id="auth-switch">
+      <button class="auth-tab active" data-mode="signin">Sign in</button>
+      <button class="auth-tab" data-mode="signup">Create account</button>
+    </div>
+
+    <!-- sign in -->
+    <form id="form-signin" class="auth-form">
+      <label>Email address
+        <input type="email" id="signin-email" placeholder="you@st.knust.edu.gh"
+               autocomplete="username" required />
+      </label>
+      <label>Password
+        <input type="password" id="signin-password" placeholder="Your password"
+               autocomplete="current-password" required />
+      </label>
+      <div class="auth-error" id="signin-error" hidden></div>
+      <button type="submit" class="btn primary auth-submit">Sign in</button>
+      <p class="auth-alt">New here? <button type="button" class="btn link" data-goto="signup">Create an account</button></p>
+    </form>
+
+    <!-- sign up -->
+    <form id="form-signup" class="auth-form" hidden>
+      <label>Full name
+        <input type="text" id="signup-name" placeholder="Joshua Kissi" autocomplete="name" required />
+      </label>
+      <label>Email address
+        <input type="email" id="signup-email" placeholder="you@st.knust.edu.gh"
+               autocomplete="username" required />
+      </label>
+      <label>Password <span class="hint">at least 6 characters</span>
+        <input type="password" id="signup-password" placeholder="Choose a password"
+               autocomplete="new-password" required />
+      </label>
+      <div class="strength" id="signup-strength" hidden>
+        <div class="strength-track"><div class="strength-fill" id="strength-fill"></div></div>
+        <span id="strength-label"></span>
+      </div>
+      <label>Confirm password
+        <input type="password" id="signup-confirm" placeholder="Type it again"
+               autocomplete="new-password" required />
+      </label>
+      <div class="auth-error" id="signup-error" hidden></div>
+      <button type="submit" class="btn primary auth-submit">Create account</button>
+      <p class="auth-alt">Already registered? <button type="button" class="btn link" data-goto="signin">Sign in</button></p>
+    </form>
+
+    <p class="auth-note">
+      Accounts are stored on this device only, so this protects the app from casual access
+      rather than acting as real security.
+    </p>
+  </div>
+</div>
+
+<header class="topbar" id="topbar" hidden>
   <div class="brand">
-    <span class="brand-mark">ES</span>
+    <span class="brand-mark">AE</span>
     <div>
-      <h1>Exam Scheduler</h1>
+      <h1>Automated Exam Timetable Scheduler</h1>
       <p>Constraint-based exam timetable generator</p>
     </div>
   </div>
   <div class="topbar-actions">
+    <span class="user-chip" id="user-chip" title="Signed in">
+      <span class="avatar" id="user-avatar">?</span>
+      <span id="user-name"></span>
+    </span>
+    <button class="btn ghost" id="btn-signout">Sign out</button>
     <button class="btn ghost" id="btn-demo">Load sample data</button>
     <button class="btn ghost" id="btn-export">Export data</button>
     <label class="btn ghost file-btn">Import data<input type="file" id="file-import" accept="application/json" hidden /></label>
@@ -24,7 +91,7 @@
   </div>
 </header>
 
-<nav class="tabs" id="tabs">
+<nav class="tabs" id="tabs" hidden>
   <button class="tab active" data-tab="courses">Courses <span class="pill" id="count-courses">0</span></button>
   <button class="tab" data-tab="rooms">Rooms <span class="pill" id="count-rooms">0</span></button>
   <button class="tab" data-tab="slots">Time Slots <span class="pill" id="count-slots">0</span></button>
@@ -33,7 +100,7 @@
   <button class="tab" data-tab="complaints">Complaints <span class="pill" id="count-complaints">0</span></button>
 </nav>
 
-<main>
+<main id="main" hidden>
 
   <!-- ============ COURSES ============ -->
   <section class="panel active" id="panel-courses">
@@ -330,10 +397,12 @@
 
 </main>
 
-<footer class="foot">
+<footer class="foot" id="foot" hidden>
   Data is stored in this browser only. Use <em>Export data</em> to keep a backup.
 </footer>
 
+<script src="js/auth-core.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/store.js"></script>
 <script src="js/scheduler.js"></script>
 <script src="js/demo.js"></script>

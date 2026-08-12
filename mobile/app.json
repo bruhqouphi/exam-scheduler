@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Exam Scheduler",
-    "slug": "exam-scheduler",
+    "name": "Automated Exam Timetable Scheduler",
+    "slug": "automated-exam-timetable-scheduler",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -9,10 +9,10 @@
     "backgroundColor": "#f6f7fb",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bruhqouphi.examscheduler"
+      "bundleIdentifier": "com.bruhqouphi.automatedexamtimetablescheduler"
     },
     "android": {
-      "package": "com.bruhqouphi.examscheduler",
+      "package": "com.bruhqouphi.automatedexamtimetablescheduler",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

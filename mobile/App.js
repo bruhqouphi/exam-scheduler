@@ -12,12 +12,15 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import * as Store from './src/engine/store';
+import * as Auth from './src/engine/auth';
+import { initials } from './src/engine/auth-core.js';
 import { detectConflicts, DEFAULTS } from './src/engine/scheduler';
 import { build as buildDemo } from './src/engine/demo';
 import { colors, radius, space, type, elevation } from './src/theme';
 import { Btn, PromptModal } from './src/ui';
 import { FadeSwap, FadeIn, Pop, PressScale, useSheetAnimation, EASE, DUR } from './src/anim';
 
+import AuthScreen from './src/screens/AuthScreen';
 import CoursesScreen from './src/screens/CoursesScreen';
 import RoomsScreen from './src/screens/RoomsScreen';
 import SlotsScreen from './src/screens/SlotsScreen';
@@ -36,6 +39,7 @@ const TABS = [
 
 export default function App() {
   const state = Store.useStore();
+  const auth = Auth.useAuth();
   const [tab, setTab] = useState('courses');
   const [menuOpen, setMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -46,7 +50,7 @@ export default function App() {
     gapMinutes: DEFAULTS.gapMinutes
   });
 
-  useEffect(() => { Store.hydrate(); }, []);
+  useEffect(() => { Store.hydrate(); Auth.hydrateAuth(); }, []);
 
   // Recomputed whenever the data or the gap setting changes; the Timetable
   // screen uses it for row highlighting and the Issues screen lists it.
@@ -124,24 +128,50 @@ export default function App() {
       ]);
   }
 
+  function signOut() {
+    setMenuOpen(false);
+    Alert.alert('Sign out',
+      'Your courses, rooms and timetable stay on this phone.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign out', onPress: () => { Auth.signOut(); setTab('courses'); } }
+      ]);
+  }
+
   const menuAnim = useSheetAnimation(menuOpen);
 
   /* ---------- render ---------- */
 
-  if (!state.ready) {
+  // Both stores must finish reading before deciding what to show — otherwise
+  // the sign-in screen flashes for a moment on every launch.
+  if (!state.ready || !auth.ready) {
     return (
       <SafeAreaProvider>
         <View style={[s.center, { backgroundColor: colors.bg }]}>
           <FadeIn>
             <View style={s.splashMark}>
-              <Text style={s.splashMarkText}>ES</Text>
+              <Text style={s.splashMarkText}>AE</Text>
             </View>
           </FadeIn>
           <FadeIn delay={120}>
-            <Text style={[type.h2, { marginTop: space.lg }]}>Exam Scheduler</Text>
+            <Text style={[type.h2, { marginTop: space.lg, textAlign: 'center' }]}>
+              Automated Exam{'\n'}Timetable Scheduler
+            </Text>
           </FadeIn>
           <ActivityIndicator color={colors.accent} style={{ marginTop: space.md }} />
         </View>
+      </SafeAreaProvider>
+    );
+  }
+
+  const user = Auth.currentUser(auth);
+
+  if (!user) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <SafeAreaView style={s.root} edges={['top', 'bottom']}>
+          <AuthScreen startMode={Auth.userCount(auth) ? 'signin' : 'signup'} />
+        </SafeAreaView>
       </SafeAreaProvider>
     );
   }
@@ -171,14 +201,16 @@ export default function App() {
 
         <View style={s.header}>
           <View style={s.brandMark}>
-            <Text style={s.brandMarkText}>ES</Text>
+            <Text style={s.brandMarkText}>AE</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={type.h1}>Exam Scheduler</Text>
-            <Text style={type.sub}>{active ? active.label : ''} · {subtitleFor(tab, badges)}</Text>
+            <Text style={type.h1} numberOfLines={1}>Exam Timetable</Text>
+            <Text style={type.sub} numberOfLines={1}>
+              {active ? active.label : ''} · {subtitleFor(tab, badges)}
+            </Text>
           </View>
-          <PressScale onPress={() => setMenuOpen(true)} scaleTo={0.9} style={s.headerBtn}>
-            <Ionicons name="ellipsis-horizontal" size={18} color={colors.accent} />
+          <PressScale onPress={() => setMenuOpen(true)} scaleTo={0.9} style={s.avatar}>
+            <Text style={s.avatarText}>{initials(user.name)}</Text>
           </PressScale>
         </View>
 
@@ -194,6 +226,19 @@ export default function App() {
               <Animated.View style={[s.sheet, menuAnim.sheet]}>
                 <Pressable onPress={() => {}}>
                   <View style={s.sheetHandle} />
+
+                  <View style={s.account}>
+                    <View style={s.accountAvatar}>
+                      <Text style={s.accountAvatarText}>{initials(user.name)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={type.h3} numberOfLines={1}>{user.name}</Text>
+                      <Text style={type.tiny} numberOfLines={1}>{user.email}</Text>
+                    </View>
+                    <Btn title="Sign out" variant="ghost" size="sm" icon="log-out-outline"
+                      onPress={signOut} />
+                  </View>
+
                   <Text style={[type.h2, { marginBottom: space.md }]}>Data</Text>
                   <ScrollView>
                     <MenuItem
@@ -368,6 +413,24 @@ const s = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accentSoft,
     alignItems: 'center', justifyContent: 'center'
   },
+  avatar: {
+    width: 38, height: 38, borderRadius: 19, backgroundColor: colors.accentSoft,
+    borderWidth: 1.5, borderColor: colors.accentLine,
+    alignItems: 'center', justifyContent: 'center'
+  },
+  avatarText: { color: colors.accent, fontWeight: '800', fontSize: 13 },
+
+  account: {
+    flexDirection: 'row', alignItems: 'center', gap: space.md,
+    backgroundColor: colors.tint, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.lineSoft,
+    padding: space.md, marginBottom: space.lg
+  },
+  accountAvatar: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: colors.accent,
+    alignItems: 'center', justifyContent: 'center'
+  },
+  accountAvatarText: { color: colors.white, fontWeight: '800', fontSize: 14 },
 
   tabBar: {
     flexDirection: 'row', backgroundColor: colors.surface,
