@@ -31,7 +31,12 @@ terminal. The phone and the computer must be on the same Wi-Fi; if your network 
 > the `.ps1` launcher. Use the batch launcher instead — `npm.cmd install`, `npx.cmd expo start`
 > — or allow local scripts once with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
-Built on Expo SDK 57 / React Native 0.86. Data is stored on the phone with `AsyncStorage`.
+Built on **Expo SDK 54** / React Native 0.81 / React 19.1, to match the version of Expo Go
+installed on the phone. Expo Go only supports one SDK at a time, so the project and the app
+have to agree — if you upgrade Expo Go later, run `npx expo install --fix` after bumping the
+`expo` version in `mobile/package.json`.
+
+Data is stored on the phone with `AsyncStorage`.
 
 ## Running the web app
 
