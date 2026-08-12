@@ -226,6 +226,39 @@ tr.conflict-row { background: var(--danger-soft) !important; }
   font-weight: 700; opacity: .7;
 }
 
+/* ---------- complaints ---------- */
+
+.lookup-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.lookup-row input { margin: 0; }
+#lookup-result:not(:empty) { margin-top: 12px; }
+
+.filter-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.chip {
+  border: 1px solid var(--line); background: #fff; color: var(--muted);
+  border-radius: 999px; padding: 5px 13px; font: inherit; font-size: .8rem;
+  font-weight: 600; cursor: pointer;
+}
+.chip:hover { color: var(--text); }
+.chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.complaint {
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 13px 15px; margin-bottom: 10px; background: #fff;
+}
+.complaint-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 3px;
+}
+.push-right { margin-left: auto; }
+.complaint-body { margin: 8px 0 0; white-space: pre-wrap; }
+.complaint-response {
+  margin-top: 9px; padding: 9px 11px; border-radius: 8px;
+  background: var(--accent-soft); font-size: .84rem;
+}
+.complaint-actions {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line);
+}
+
 .foot { text-align: center; font-size: .78rem; color: var(--muted); padding: 0 24px 30px; }
 
 /* ---------- print ---------- */

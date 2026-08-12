@@ -10,7 +10,7 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   let state = Store.load();
-  let filters = { courses: '', rooms: '' };
+  let filters = { courses: '', rooms: '', complaints: 'all' };
   let view = 'list';
   let conflicts = [];
 
@@ -602,6 +602,227 @@
         '</div></div>').join('');
   }
 
+  /* ================= complaints ================= */
+
+  const CATEGORY_LABELS = {
+    clash: 'Exam clash',
+    backToBack: 'Exams too close together',
+    room: 'Room / venue problem',
+    time: 'Date or time problem',
+    missing: 'Exam missing from timetable',
+    registration: 'Wrong course registration',
+    accessibility: 'Special needs / accessibility',
+    other: 'Other'
+  };
+
+  const STATUS_LABELS = { new: 'New', reviewing: 'Reviewing', resolved: 'Resolved' };
+
+  function fmtWhen(iso) {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) +
+           ', ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function populateComplaintCourses() {
+    const select = $('#complaint-course');
+    const current = select.value;
+    select.innerHTML = '<option value="">— not about one specific exam —</option>' +
+      state.courses.map(c =>
+        '<option value="' + c.id + '">' + esc(c.code + ' — ' + c.name) + '</option>').join('');
+    if (current) select.value = current;
+  }
+
+  // A single student's personal timetable, with their own clashes called out.
+  function renderLookup(studentId) {
+    const host = $('#lookup-result');
+    const id = String(studentId || '').trim();
+    if (!id) { host.innerHTML = ''; return; }
+
+    const courses = Store.coursesForStudent(id);
+    if (!courses.length) {
+      host.innerHTML = '<div class="message warn">No courses are registered under student ID ' +
+        esc(id) + '. Check the ID, or raise a complaint below if your registration is wrong.</div>';
+      return;
+    }
+
+    const rows = courses.map(c => {
+      const entry = (state.timetable || []).find(e => e.courseId === c.id);
+      return {
+        course: c,
+        slot: entry ? Store.byId(state.slots, entry.slotId) : null,
+        room: entry ? Store.byId(state.rooms, entry.roomId) : null
+      };
+    }).sort((a, b) => {
+      if (!a.slot || !b.slot) return a.slot ? -1 : 1;
+      return a.slot.date === b.slot.date
+        ? Store.toMinutes(a.slot.start) - Store.toMinutes(b.slot.start)
+        : (a.slot.date < b.slot.date ? -1 : 1);
+    });
+
+    // Warn this student about their own clashes and tight turnarounds.
+    const warnings = [];
+    for (let i = 0; i < rows.length; i++) {
+      for (let j = i + 1; j < rows.length; j++) {
+        const a = rows[i], b = rows[j];
+        if (!a.slot || !b.slot) continue;
+        if (Store.slotsOverlap(a.slot, b.slot) || a.slot.id === b.slot.id) {
+          warnings.push({ bad: true, text: a.course.code + ' and ' + b.course.code +
+            ' are at the same time on ' + fmtDate(a.slot.date) + '.' });
+        } else if (Store.slotsAdjacent(a.slot, b.slot, readOptions().gapMinutes)) {
+          warnings.push({ bad: false, text: a.course.code + ' and ' + b.course.code +
+            ' are back-to-back on ' + fmtDate(a.slot.date) + '.' });
+        }
+      }
+    }
+
+    const unplaced = rows.filter(r => !r.slot).length;
+    if (unplaced) {
+      warnings.push({ bad: true, text: unplaced + ' of your exams have not been scheduled yet.' });
+    }
+
+    host.innerHTML =
+      '<div class="table-wrap"><table><thead><tr>' +
+        '<th>Course</th><th>Date</th><th>Time</th><th>Room</th>' +
+      '</tr></thead><tbody>' +
+      rows.map(r =>
+        '<tr>' +
+          '<td><strong class="mono">' + esc(r.course.code) + '</strong></td>' +
+          '<td>' + (r.slot ? fmtDate(r.slot.date) : '<span class="tag warn">not scheduled</span>') + '</td>' +
+          '<td class="mono">' + (r.slot ? esc(r.slot.start + '–' + r.slot.end) : '—') + '</td>' +
+          '<td>' + (r.room ? esc(r.room.name) : '—') + '</td>' +
+        '</tr>').join('') +
+      '</tbody></table></div>' +
+      warnings.map(w =>
+        '<div class="issue ' + (w.bad ? 'error' : 'warning') + '"><span class="dot"></span><div>' +
+          esc(w.text) + '</div></div>').join('');
+  }
+
+  function renderComplaints() {
+    const host = $('#complaint-list');
+    const all = state.complaints || [];
+    const filter = filters.complaints;
+    const list = filter === 'all' ? all : all.filter(c => c.status === filter);
+
+    const open = all.filter(c => c.status !== 'resolved').length;
+    const pill = $('#count-complaints');
+    pill.textContent = open;
+    pill.className = 'pill' + (open ? ' alert' : '');
+
+    $$('#complaint-filters .chip').forEach(chip =>
+      chip.classList.toggle('active', chip.dataset.status === filter));
+
+    if (!list.length) {
+      host.innerHTML = '<div class="empty">' +
+        (all.length ? 'No ' + filter + ' complaints.' : 'No complaints have been submitted yet.') +
+        '</div>';
+      return;
+    }
+
+    host.innerHTML = list.map(c => {
+      const course = c.courseId ? Store.byId(state.courses, c.courseId) : null;
+      const tagClass = c.status === 'resolved' ? 'ok' : (c.status === 'reviewing' ? 'warn' : 'bad');
+      return '<div class="complaint">' +
+        '<div class="complaint-head">' +
+          '<strong class="mono">' + esc(c.studentId) + '</strong>' +
+          (c.studentName ? ' <span class="sub">' + esc(c.studentName) + '</span>' : '') +
+          '<span class="tag ' + tagClass + '">' + esc(STATUS_LABELS[c.status] || c.status) + '</span>' +
+          '<span class="sub push-right">' + esc(fmtWhen(c.createdAt)) + '</span>' +
+        '</div>' +
+        '<div class="sub">' + esc(CATEGORY_LABELS[c.category] || c.category) +
+          (course ? ' · ' + esc(course.code + ' — ' + course.name) : '') + '</div>' +
+        '<p class="complaint-body">' + esc(c.message) + '</p>' +
+        (c.response
+          ? '<div class="complaint-response"><strong>Response:</strong> ' + esc(c.response) + '</div>'
+          : '') +
+        '<div class="complaint-actions">' +
+          (c.status !== 'reviewing' && c.status !== 'resolved'
+            ? '<button class="btn link" data-status-set="reviewing" data-id="' + c.id + '">Mark reviewing</button>' : '') +
+          (c.status !== 'resolved'
+            ? '<button class="btn link" data-status-set="resolved" data-id="' + c.id + '">Mark resolved</button>'
+            : '<button class="btn link" data-status-set="new" data-id="' + c.id + '">Reopen</button>') +
+          '<button class="btn link" data-reply="' + c.id + '">' +
+            (c.response ? 'Edit response' : 'Respond') + '</button>' +
+          '<button class="btn link danger" data-del-complaint="' + c.id + '">Delete</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    host.querySelectorAll('[data-status-set]').forEach(b =>
+      b.addEventListener('click', () => {
+        Store.updateComplaint(b.dataset.id, { status: b.dataset.statusSet });
+        refresh();
+      }));
+    host.querySelectorAll('[data-reply]').forEach(b =>
+      b.addEventListener('click', () => {
+        const c = Store.byId(state.complaints, b.dataset.reply);
+        const text = prompt('Response to student ' + c.studentId + ':', c.response || '');
+        if (text === null) return;
+        Store.updateComplaint(c.id, { response: text });
+        refresh();
+      }));
+    host.querySelectorAll('[data-del-complaint]').forEach(b =>
+      b.addEventListener('click', () => {
+        if (confirm('Delete this complaint permanently?')) {
+          Store.removeComplaint(b.dataset.delComplaint);
+          refresh();
+        }
+      }));
+  }
+
+  function initComplaints() {
+    $('#form-complaint').addEventListener('submit', e => {
+      e.preventDefault();
+      const saved = Store.addComplaint({
+        studentId: $('#complaint-student').value,
+        studentName: $('#complaint-name').value,
+        courseId: $('#complaint-course').value,
+        category: $('#complaint-category').value,
+        message: $('#complaint-message').value
+      });
+
+      const box = $('#complaint-feedback');
+      if (!saved) {
+        box.textContent = 'Please give your student ID and describe the problem.';
+        box.className = 'message bad';
+      } else {
+        box.textContent = 'Complaint submitted. The exams office can now see it under "Complaints received".';
+        box.className = 'message';
+        $('#form-complaint').reset();
+      }
+      box.hidden = false;
+      refresh();
+    });
+
+    $('#btn-lookup').addEventListener('click', () => renderLookup($('#lookup-student').value));
+    $('#lookup-student').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); renderLookup($('#lookup-student').value); }
+    });
+
+    $$('#complaint-filters .chip').forEach(chip =>
+      chip.addEventListener('click', () => {
+        filters.complaints = chip.dataset.status;
+        renderComplaints();
+      }));
+
+    $('#btn-complaints-csv').addEventListener('click', () => {
+      const all = state.complaints || [];
+      if (!all.length) { alert('There are no complaints to export.'); return; }
+      const lines = [['Submitted', 'Student ID', 'Name', 'Course', 'Category', 'Status', 'Complaint', 'Response']];
+      all.forEach(c => {
+        const course = c.courseId ? Store.byId(state.courses, c.courseId) : null;
+        lines.push([
+          fmtWhen(c.createdAt), c.studentId, c.studentName,
+          course ? course.code : '', CATEGORY_LABELS[c.category] || c.category,
+          STATUS_LABELS[c.status] || c.status, c.message, c.response
+        ]);
+      });
+      const csv = lines.map(row =>
+        row.map(v => '"' + String(v === undefined ? '' : v).replace(/"/g, '""') + '"').join(',')).join('\n');
+      download(csv, 'exam-complaints.csv', 'text/csv');
+    });
+  }
+
   /* ================= data in / out ================= */
 
   function exportCsv() {
@@ -674,7 +895,7 @@
     });
 
     $('#btn-reset').addEventListener('click', () => {
-      if (confirm('Delete all courses, rooms, time slots and the timetable?')) {
+      if (confirm('Delete all courses, rooms, time slots, the timetable and every complaint?')) {
         Store.clearAll();
         state = Store.getState();
         $('#generate-message').hidden = true;
@@ -695,6 +916,8 @@
     renderSlots();
     renderTimetable();
     renderStats();
+    populateComplaintCourses();
+    renderComplaints();
     $('#count-courses').textContent = state.courses.length;
     $('#count-rooms').textContent = state.rooms.length;
     $('#count-slots').textContent = state.slots.length;
@@ -709,6 +932,7 @@
     initRooms();
     initSlots();
     initSchedule();
+    initComplaints();
     initData();
     refresh();
   });

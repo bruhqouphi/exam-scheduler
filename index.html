@@ -30,6 +30,7 @@
   <button class="tab" data-tab="slots">Time Slots <span class="pill" id="count-slots">0</span></button>
   <button class="tab" data-tab="schedule">Timetable</button>
   <button class="tab" data-tab="conflicts">Conflicts <span class="pill" id="count-conflicts">0</span></button>
+  <button class="tab" data-tab="complaints">Complaints <span class="pill" id="count-complaints">0</span></button>
 </nav>
 
 <main>
@@ -254,6 +255,76 @@
       <p class="note">Runs against the timetable as it stands — including any manual changes you made in the
          Timetable tab.</p>
       <div id="conflict-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ COMPLAINTS ============ -->
+  <section class="panel" id="panel-complaints">
+    <div class="grid">
+      <div class="card form-card">
+        <h2>Find my exams</h2>
+        <p class="note">Enter your student ID to see your personal timetable before you complain.</p>
+        <div class="lookup-row">
+          <input type="text" id="lookup-student" placeholder="e.g. 20700001" />
+          <button type="button" class="btn primary" id="btn-lookup">Look up</button>
+        </div>
+        <div id="lookup-result"></div>
+
+        <div class="divider"></div>
+
+        <h2>Send a complaint</h2>
+        <form id="form-complaint">
+          <div class="row">
+            <label>Student ID
+              <input type="text" id="complaint-student" placeholder="20700001" required />
+            </label>
+            <label>Your name <span class="hint">optional</span>
+              <input type="text" id="complaint-name" placeholder="Ama Mensah" />
+            </label>
+          </div>
+          <label>Which exam is this about?
+            <select id="complaint-course">
+              <option value="">— not about one specific exam —</option>
+            </select>
+          </label>
+          <label>What is the problem?
+            <select id="complaint-category">
+              <option value="clash">Two of my exams clash</option>
+              <option value="backToBack">Too many exams close together</option>
+              <option value="room">Room or venue problem</option>
+              <option value="time">Date or time problem</option>
+              <option value="missing">My exam is missing from the timetable</option>
+              <option value="registration">I am registered for the wrong course</option>
+              <option value="accessibility">Special needs / accessibility</option>
+              <option value="other">Something else</option>
+            </select>
+          </label>
+          <label>Details
+            <textarea id="complaint-message" rows="4"
+              placeholder="Explain the problem, including dates and course codes where you can." required></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Submit complaint</button>
+          </div>
+        </form>
+        <div id="complaint-feedback" class="message" hidden></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Complaints received</h2>
+          <div class="head-actions">
+            <button class="btn ghost small" id="btn-complaints-csv">Export CSV</button>
+          </div>
+        </div>
+        <div class="filter-bar" id="complaint-filters">
+          <button class="chip active" data-status="all">All</button>
+          <button class="chip" data-status="new">New</button>
+          <button class="chip" data-status="reviewing">Reviewing</button>
+          <button class="chip" data-status="resolved">Resolved</button>
+        </div>
+        <div id="complaint-list"></div>
+      </div>
     </div>
   </section>
 

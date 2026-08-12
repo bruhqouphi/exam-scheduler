@@ -50,7 +50,19 @@ manual change:
 | A student sitting two exams on the same day | warning |
 | A course that has not been scheduled | warning |
 
-### 6. Optimisation
+### 6. Student complaints
+A **Complaints** tab where students can raise problems the solver cannot know about.
+
+- **Find my exams** — a student types their ID and gets their personal timetable, with their
+  own clashes and back-to-back sittings flagged automatically.
+- **Send a complaint** — student ID, name, the exam it concerns, a category (exam clash, exams
+  too close together, room problem, date/time problem, exam missing, wrong registration,
+  special needs, other) and the details.
+- **Complaints received** — the exams office side: filter by New / Reviewing / Resolved, write
+  a response, change status, reopen or delete, and export the lot to CSV. The tab badge counts
+  complaints that are still open.
+
+### 7. Optimisation
 Beyond staying legal, the solver minimises a cost function covering:
 
 - spreading exams evenly across the available days
@@ -104,10 +116,12 @@ The search in [`js/scheduler.js`](js/scheduler.js) is:
 ```
 index.html          markup and page structure
 css/style.css       styling
-js/store.js         data model + localStorage persistence + time helpers
+js/store.js         data model (courses, rooms, slots, timetable, complaints),
+                    localStorage persistence and time helpers
 js/scheduler.js     the CSP engine: domains, constraints, search, cost, conflict detection
 js/demo.js          sample dataset
-js/app.js           UI wiring: tabs, forms, tables, timetable, conflicts, import/export
+js/app.js           UI wiring: tabs, forms, tables, timetable, conflicts,
+                    complaints, import/export
 test/run.js         headless test harness (Node, no dependencies)
 ```
 
@@ -117,7 +131,9 @@ test/run.js         headless test harness (Node, no dependencies)
 node test/run.js
 ```
 
-Runs the solver headlessly and asserts the hard constraints hold, that each conflict type is
-detected on a hand-broken timetable, that impossible courses are explained rather than
-dropped, that a fully saturated instance (8 exams into exactly 8 openings) still solves, and
-that an over-subscribed instance reports the overflow instead of forcing a clash.
+30 checks covering: the hard constraints hold on the sample dataset; each conflict type is
+detected on a hand-broken timetable; the complaint lifecycle (submit, validate, respond,
+change status, delete, and loading data saved before complaints existed); impossible courses
+are explained rather than dropped; a fully saturated instance (8 exams into exactly 8
+openings) still solves; and an over-subscribed instance reports the overflow instead of
+forcing a clash.

@@ -88,7 +88,50 @@ check('detects too many students for a room', types.indexOf('capacity') > -1);
 check('detects scheduling outside available periods', types.indexOf('availability') > -1);
 check('detects a slot shorter than the exam', types.indexOf('duration') > -1);
 
-/* ---------- 3. impossible courses are explained, not silently dropped ---------- */
+/* ---------- 3. student complaints ---------- */
+
+console.log('\n=== COMPLAINTS ===');
+const someStudent = state.courses[0].students[0];
+const mine = Store.coursesForStudent(someStudent);
+check('a student ID resolves to their registered courses', mine.length > 0,
+      someStudent + ' -> ' + mine.map(c => c.code).join(', '));
+check('an unknown student ID resolves to nothing',
+      Store.coursesForStudent('does-not-exist').length === 0);
+
+const filed = Store.addComplaint({
+  studentId: someStudent,
+  studentName: 'Test Student',
+  courseId: state.courses[0].id,
+  category: 'clash',
+  message: 'My two exams are on the same morning.'
+});
+check('a complaint is accepted and starts as new', filed && filed.status === 'new');
+check('complaints carry a submission timestamp', filed && !isNaN(new Date(filed.createdAt).getTime()));
+check('a complaint with no student ID is rejected',
+      Store.addComplaint({ studentId: '', message: 'anonymous' }) === null);
+check('a complaint with no message is rejected',
+      Store.addComplaint({ studentId: someStudent, message: '   ' }) === null);
+check('it shows up in the open queue', Store.openComplaints().length === 1);
+
+Store.updateComplaint(filed.id, { status: 'reviewing', response: 'We are looking into it.' });
+let reloaded = Store.byId(Store.getState().complaints, filed.id);
+check('status and response are saved', reloaded.status === 'reviewing' &&
+      reloaded.response === 'We are looking into it.');
+check('an invalid status is ignored',
+      Store.updateComplaint(filed.id, { status: 'nonsense' }).status === 'reviewing');
+
+Store.updateComplaint(filed.id, { status: 'resolved' });
+check('resolved complaints leave the open queue', Store.openComplaints().length === 0);
+
+Store.removeComplaint(filed.id);
+check('a complaint can be deleted', Store.getState().complaints.length === 0);
+
+// Old saved files predate the complaints field — loading must not break.
+Store.replaceState({ courses: [], rooms: [], slots: [], timetable: [] });
+check('data saved before complaints existed still loads',
+      Array.isArray(Store.getState().complaints) && Store.getState().complaints.length === 0);
+
+/* ---------- 4. impossible courses are explained, not silently dropped ---------- */
 
 console.log('\n=== INFEASIBLE INPUT ===');
 Store.clearAll();
@@ -103,7 +146,7 @@ check('explains a class too big for every room',
 check('explains an exam longer than every slot',
       infeasible.unscheduled.some(u => /long enough/.test(u.reason)));
 
-/* ---------- 4. saturated instance: 8 exams into exactly 8 openings ---------- */
+/* ---------- 5. saturated instance: 8 exams into exactly 8 openings ---------- */
 
 console.log('\n=== SATURATED INSTANCE ===');
 Store.clearAll();

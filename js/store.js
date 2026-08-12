@@ -15,6 +15,7 @@ const Store = (function () {
       slots: [],
       timetable: [],   // [{ courseId, slotId, roomId }]
       unscheduled: [], // [{ courseId, reason }]
+      complaints: [],  // student-submitted issues, see addComplaint
       stats: null,
       seq: 1
     };
@@ -32,6 +33,8 @@ const Store = (function () {
       if (raw) {
         const parsed = JSON.parse(raw);
         state = Object.assign(emptyState(), parsed);
+        // Data saved before a field existed comes back without it.
+        if (!Array.isArray(state.complaints)) state.complaints = [];
       }
     } catch (err) {
       console.warn('Could not read saved data, starting fresh.', err);
@@ -54,6 +57,7 @@ const Store = (function () {
 
   function replaceState(next) {
     state = Object.assign(emptyState(), next);
+    if (!Array.isArray(state.complaints)) state.complaints = [];
     save();
   }
 
@@ -258,12 +262,65 @@ const Store = (function () {
     save();
   }
 
+  /* ---------- complaints ---------- */
+
+  const COMPLAINT_STATUSES = ['new', 'reviewing', 'resolved'];
+
+  function addComplaint(data) {
+    const complaint = {
+      id: uid('q'),
+      studentId: (data.studentId || '').trim(),
+      studentName: (data.studentName || '').trim(),
+      courseId: data.courseId || '',
+      category: data.category || 'other',
+      message: (data.message || '').trim(),
+      status: 'new',
+      response: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (!complaint.studentId || !complaint.message) return null;
+    state.complaints.unshift(complaint); // newest first
+    save();
+    return complaint;
+  }
+
+  function updateComplaint(id, data) {
+    const complaint = byId(state.complaints, id);
+    if (!complaint) return null;
+    if (data.status !== undefined && COMPLAINT_STATUSES.indexOf(data.status) > -1) {
+      complaint.status = data.status;
+    }
+    if (data.response !== undefined) complaint.response = String(data.response).trim();
+    complaint.updatedAt = new Date().toISOString();
+    save();
+    return complaint;
+  }
+
+  function removeComplaint(id) {
+    state.complaints = state.complaints.filter(c => c.id !== id);
+    save();
+  }
+
+  function openComplaints() {
+    return state.complaints.filter(c => c.status !== 'resolved');
+  }
+
+  // Every course a given student ID is registered for.
+  function coursesForStudent(studentId) {
+    const id = String(studentId || '').trim();
+    if (!id) return [];
+    return state.courses.filter(c => (c.students || []).indexOf(id) > -1);
+  }
+
   return {
     load, save, getState, replaceState, clearAll,
     addCourse, updateCourse, removeCourse,
     addRoom, updateRoom, removeRoom,
     addSlot, updateSlot, removeSlot,
     setTimetable, setAssignment, clearTimetable,
+    addComplaint, updateComplaint, removeComplaint, openComplaints, coursesForStudent,
+    COMPLAINT_STATUSES,
     toMinutes, slotLength, slotsOverlap, slotsAdjacent,
     parseStudents, studentsOf, headcount, byId
   };
