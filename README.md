@@ -23,8 +23,13 @@ npx expo start
 ```
 
 Install **Expo Go** from the Play Store / App Store, then scan the QR code that appears in the
-terminal. The phone and the computer must be on the same Wi-Fi; if your network blocks that,
-run `npx expo start --tunnel` instead.
+terminal. The phone and the computer must be on the same Wi-Fi; if your network blocks that
+(many campus networks isolate clients from each other), run `npx expo start --tunnel` instead.
+
+> **On Windows PowerShell**, `npm` and `npx` may fail with *"npm.ps1 cannot be loaded because
+> running scripts is disabled on this system"*. That is PowerShell's execution policy blocking
+> the `.ps1` launcher. Use the batch launcher instead — `npm.cmd install`, `npx.cmd expo start`
+> — or allow local scripts once with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
 Built on Expo SDK 57 / React Native 0.86. Data is stored on the phone with `AsyncStorage`.
 
